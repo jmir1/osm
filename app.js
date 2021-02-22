@@ -1,0 +1,491 @@
+require('dotenv').config();
+const querystring = require("querystring");
+const fetch = require("node-fetch");
+const cookieParser = require("cookie-parser");
+const cookieEncrypter = require("cookie-encrypter");
+const express = require("express");
+const request = require("request");
+const http = require("http");
+const https = require("https");
+const app = express();
+const fs = require("fs");
+//const mongo = require('mongodb');
+
+const privateKey = fs.readFileSync(
+  process.env.PRIVKEYPATH,
+  "utf8"
+);
+const certificate = fs.readFileSync(
+  process.env.CERTPATH,
+  "utf8"
+);
+
+const rootdir = process.env.ROOTDIR;
+
+const credentials = { key: privateKey, cert: certificate };
+
+const cookie_secret = process.env.COOKIE_SECRET;
+
+const client_id = process.env.CLIENT_ID;
+const client_secret = process.env.CLIENT_SECRET;
+
+var MongoClient = require("mongodb").MongoClient;
+var url = "mongodb://localhost:27017/osu-stocks";
+
+app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
+
+function find_user(user, res) {
+  var res;
+  MongoClient.connect(url, { useUnifiedTopology: true }, function (err, db) {
+    if (err) throw err;
+    var dbo = db.db("osu-stocks");
+    var query = { "user.user.username": user };
+    dbo
+      .collection("inventory")
+      .find(query)
+      .toArray(function (err, result) {
+        if (err) throw err;
+        db.close();
+        res.send(result);
+      });
+  });
+}
+
+async function get_stock(stock, res) {
+  var db = await MongoClient.connect(url);
+  var dbo = await db.db("osu-stocks");
+  var dbres = await dbo
+    .collection("inventory")
+    .findOne(
+      { "user.user.id": parseInt(stock, 10) },
+      { projection: { _id: 0, price: 1, "user.user.username": 1, shares: 1 } }
+    );
+  //console.log(stock, dbres);
+  res.send(dbres);
+}
+
+function get_leaderboard(res) {
+  MongoClient.connect(url, { useUnifiedTopology: true }, function (err, db) {
+    if (err) throw err;
+    var dbo = db.db("osu-stocks");
+    var query = {};
+    var projection = {
+      _id: 0,
+      price: 1,
+      "user.global_rank": 1,
+      "user.pp": 1,
+      "user.user.username": 1,
+    };
+    dbo
+      .collection("inventory")
+      .find(query, { projection: projection })
+      .sort({ price: -1 })
+      .toArray(function (err, result) {
+        if (err) throw err;
+        db.close();
+        var string = "[";
+        for (player in result) {
+          if (player == result.length - 1)
+            string += JSON.stringify(result[player]) + "]";
+          else string += JSON.stringify(result[player]) + ",\n";
+        }
+        res.type("application/json");
+        res.send(string);
+      });
+  });
+}
+var cc_refresh_token = fs.readFileSync(rootdir + "/refresh_token", "utf8");
+var cc_access_token;
+(function first_token() {
+  var options = {
+    url: "https://osu.ppy.sh/oauth/token",
+    body: {
+      client_id: client_id,
+      client_secret: client_secret,
+      grant_type: "refresh_token",
+      scope: "public",
+      refresh_token: cc_refresh_token,
+    },
+    json: true,
+  };
+  request.post(options, function (error, response, body) {
+    if (!error && response.statusCode === 200) {
+      console.log(body);
+      cc_access_token = body.access_token;
+      cc_refresh_token = body.refresh_token;
+      fs.writeFileSync(rootdir + "/refresh_token", body.refresh_token);
+      first_leaderboard(1);
+    } else console.log("error authenticating");
+  });
+  setTimeout(get_token, 8640000);
+})();
+
+function get_token() {
+  var options = {
+    url: "https://osu.ppy.sh/oauth/token",
+    body: {
+      client_id: client_id,
+      client_secret: client_secret,
+      grant_type: "refresh_token",
+      scope: "public",
+      refresh_token: refresh_token,
+    },
+    json: true,
+  };
+  request.post(options, function (error, response, body) {
+    if (!error && response.statusCode === 200) {
+      console.log(body);
+      cc_access_token = body.access_token;
+      refresh_token = body.refresh_token;
+      fs.writeFileSync(rootdir + "/refresh_token", body.refresh_token);
+    } else console.log("error authenticating");
+  });
+  setTimeout(get_token, 8640000);
+}
+
+async function first_leaderboard(page) {
+  if (page) {
+    console.log("page", page);
+    var options = {
+      url:
+        "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
+        page,
+      headers: { Authorization: "Bearer " + cc_access_token },
+    };
+    try {
+      const response = await fetch(options.url, {
+        method: "GET",
+        headers: options.headers,
+      });
+      json = await response.json();
+      var myobj = json.ranking;
+      var db = await MongoClient.connect(url);
+      var dbo = await db.db("osu-stocks");
+      for (var i = 0; i < myobj.length; i++) {
+        var players = await dbo
+          .collection("inventory")
+          .findOne({ "user.user.id": myobj[i].user.id });
+        if (!players && myobj[i]) {
+          console.log("new user added: ", myobj[i].user.id);
+          var db2 = await MongoClient.connect(url);
+          var dbo2 = await db.db("osu-stocks");
+          await dbo2
+            .collection("inventory")
+            .insertOne({
+              user: myobj[i],
+              shares: { total: 100000, bought: 0 },
+              price: myobj[i].pp / 100,
+              "pp-30": [{ date: Date.now(), pp: myobj[i].pp }],
+            });
+          await db2.close();
+        }
+      }
+      await db.close();
+      if (json.cursor) setTimeout(first_leaderboard, 1000, json.cursor.page);
+      else {
+        console.log("done");
+        setTimeout(update_leaderboard, 1000, 1);
+      }
+    } catch (error) {
+      console.log("error" + error);
+    }
+  }
+}
+
+async function update_leaderboard(page) {
+  if (page) {
+    console.log("page", page);
+    var options = {
+      url:
+        "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
+        page,
+      headers: { Authorization: "Bearer " + cc_access_token },
+    };
+    try {
+      const response = await fetch(options.url, {
+        method: "GET",
+        headers: options.headers,
+      });
+      json = await response.json();
+      var myobj = json.ranking;
+      var db = await MongoClient.connect(url);
+      var dbo = await db.db("osu-stocks");
+      for (var i = 0; i < myobj.length; i++) {
+        //console.log(myobj[i].global_rank);
+        var pp30 = await dbo
+          .collection("inventory")
+          .findOne({ "user.user.id": myobj[i].user.id });
+        //console.log(pp30["pp-30"]);
+        var market_multiplier =
+          1 / (1 - pp30.shares.bought / pp30.shares.total);
+        var price =
+          (myobj[i].pp /
+            (0.5 - (myobj[i].pp - pp30["pp-30"][0].pp) / pp30["pp-30"][0].pp) /
+            200) *
+          market_multiplier;
+        var counter = 0;
+        for (j in pp30["pp-30"]) {
+          if (Date.now() - pp30["pp-30"][j].date > 2592000000) {
+            counter++;
+          } else {
+            break;
+          }
+        }
+        for (j = 0; j < counter; j++) {
+          pp30["pp-30"].shift();
+        } /**
+                for(j in pp30["daypp-30"]) {
+                    if((Date.now() - pp30["daypp-30"][j].date) > 2592000000) {
+                        counter++;
+                    } else {
+                        break;
+                    }
+                }
+                for(j=0;j<counter;j++) {
+                    pp30["daypp-30"].shift();
+                }**/
+        var last_daypp_30 = pp30["pp-30"][pp30["pp-30"].length - 1];
+        if (
+          pp30["pp-30"][pp30["pp-30"].length - 1].date <
+          Date.now() - 86400000
+        ) {
+          var db2 = await MongoClient.connect(url);
+          var dbo2 = await db.db("osu-stocks");
+          await dbo2
+            .collection("inventory")
+            .updateOne(
+              { "user.user.id": myobj[i].user.id },
+              {
+                $set: {
+                  price: price,
+                  "pp-30": pp30["pp-30"].concat({
+                    date: Date.now(),
+                    pp: myobj[i].pp,
+                  }),
+                  user: myobj[i],
+                },
+              }
+            );
+        } else {
+          var db2 = await MongoClient.connect(url);
+          var dbo2 = await db.db("osu-stocks");
+          await dbo2
+            .collection("inventory")
+            .updateOne(
+              { "user.user.id": myobj[i].user.id },
+              { $set: { price: price, user: myobj[i] } }
+            );
+        }
+        await db2.close();
+      }
+      await db.close();
+      if (json.cursor) setTimeout(update_leaderboard, 1000, json.cursor.page);
+      else {
+        console.log("done");
+        setTimeout(update_leaderboard, 1000, 1);
+      }
+    } catch (error) {
+      console.log("error" + error);
+    }
+  }
+}
+
+//app.use(express.static('.'));
+app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
+
+app.get("/", function (req, res) {
+  //find_user("mrekk", res);
+  //res.redirect("/stock?stock=4504101");
+  get_leaderboard(res);
+});
+
+app.get("/stock", function (req, res) {
+  var stock = req.query.stock;
+  get_stock(stock, res);
+});
+
+app.get("/me", function (req, res) {
+  if (req.cookies["access_token"]) {
+    get_user(req.cookies["access_token"], req.signedCookies["session"], res);
+  } else if (req.signedCookies["refresh_token"]) {
+    res.redirect("/refresh_token");
+  } else {
+    res.redirect("/login");
+  }
+});
+
+async function get_user(access_token, id, res) {
+  /**var options = {
+    url: "https://osu.ppy.sh/api/v2/me/osu",
+    headers: { Authorization: "Bearer " + access_token },
+  };
+  try {
+    const response = await fetch(options.url, {
+      method: "GET",
+      headers: options.headers,
+    });
+    json = await response.json();
+    res.send(json);
+  } catch (error) {
+    console.log("error" + error);
+    res.send("error" + error);
+  }**/
+  console.log(id);
+  var db = await MongoClient.connect(url);
+  var dbo = await db.db("osu-stocks");
+  var dbres = await dbo.collection("users").findOne(
+      { "user.id": parseInt(id) });
+  res.send(dbres.user);
+}
+
+app.get("/rankings", function (req, res) {
+  get_leaderboard(res);
+});
+app.get("/login", function (req, res) {
+  var referer = req.header("Referer") || "https://stocks.jmir.xyz";
+
+  if (req.signedCookies["access_token"]) {
+    res.redirect(referer);
+  } else if (req.signedCookies["refresh_token"]) {
+    res.redirect("/refresh_token");
+  } else {
+    // your application requests authorization
+    res.redirect(
+      "https://osu.ppy.sh/oauth/authorize?" +
+        querystring.stringify({
+          response_type: "code",
+          client_id: client_id,
+          state: "state",
+          scope: "public identify",
+          redirect_uri: "https://stocks.jmir.xyz/callback",
+        })
+    );
+  }
+});
+
+app.get("/callback", function (req, res) {
+  // your application requests refresh and access tokens
+  // after checking the state parameter
+
+  var code = req.query.code || null;
+  var state = req.query.state || null;
+  if (code) {
+    //console.log(state, code);
+    var authOptions = {
+      url: "https://osu.ppy.sh/oauth/token",
+      body: {
+        client_id: client_id,
+        client_secret: client_secret,
+        code: code,
+        grant_type: "authorization_code",
+        redirect_uri: "https://stocks.jmir.xyz/callback",
+      },
+      json: true,
+    };
+
+    request.post(authOptions, function (error, response, body) {
+      if (!error && response.statusCode === 200) {
+        //console.log(body);
+        var access_token = body.access_token,
+          refresh_token = body.refresh_token,
+          expires_in = body.expires_in;
+        var cookieParams = {
+          signed: true,
+          httpOnly: true,
+          maxAge: 86400000,
+        };
+        var accessCookieParams = {
+          plain: true,
+          httpOnly: true,
+          maxAge: 86400000,
+        };
+        res.cookie("access_token", access_token, accessCookieParams);
+        res.cookie("refresh_token", refresh_token, cookieParams);
+        var options = {
+          url: "https://osu.ppy.sh/api/v2/me/osu",
+          headers: { Authorization: "Bearer " + access_token },
+        };
+        request.get(options, function(error, response, body){
+          var result = JSON.parse(body);
+          console.log(result);
+          res.cookie("session", result.id, cookieParams);
+          login_user(result);
+          res.redirect("/me");
+        });
+        //console.log(state);
+        //if (state) res.redirect(state);
+        
+      } else {
+        res.redirect(
+          "/#" +
+            querystring.stringify({
+              error: error,
+            })
+        );
+      }
+    });
+  } else {
+    res.redirect(
+      "/#" +
+        querystring.stringify({
+          error: error,
+        })
+    );
+  }
+});
+
+async function login_user(userres) {
+  var db = await MongoClient.connect(url);
+  var dbo = await db.db("osu-stocks");
+  var dbres = await dbo.collection("users").findOne(
+      { "user.id": userres.id });
+  if(json.id && !dbres) await dbo
+    .collection("users")
+    .insertOne({user: userres, shares: {}, net_worth: 0});
+}
+
+app.get("/refresh_token", function (req, res) {
+  var referer = req.get("Referer") || "/me";
+  if (req.cookies["access_token"]) {
+    res.redirect(referer);
+  } else {
+    // requesting access token from refresh token
+    var options = {
+      url: "https://osu.ppy.sh/oauth/token",
+      body: {
+        client_id: client_id,
+        client_secret: client_secret,
+        grant_type: "refresh_token",
+        scope: "public",
+        refresh_token: req.signedCookies["refresh_token"],
+      },
+      json: true,
+    };
+    request.post(options, function (error, response, body) {
+      console.log(error, body);
+      if (!error && response.statusCode === 200) {
+        var access_token = body.access_token;
+        refresh_token = body.refresh_token;
+        var expires_in = body.expires_in;
+        var cookieParams = {
+          signed: true,
+          httpOnly: true,
+          maxAge: 86400000,
+        };
+        var accessCookieParams = {
+          plain: true,
+          httpOnly: true,
+          maxAge: 86400000,
+        };
+        res.cookie("access_token", access_token, accessCookieParams);
+        res.cookie("refresh_token", refresh_token, cookieParams);
+        res.redirect(referer);
+      } else res.send("error authenticating");
+    });
+  }
+});
+
+const httpServer = http.createServer(app);
+const httpsServer = https.createServer(credentials, app);
+httpsServer.listen(8444);
+httpServer.listen(8480);

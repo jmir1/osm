@@ -1,0 +1,8 @@
+start
+stop
+refresh_token
+app.log
+app.pid
+.env
+.vscode/
+node_modules/

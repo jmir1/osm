@@ -1,8 +1,6 @@
-start
-stop
+restart.sh
 refresh_token
 app.log
-app.pid
 .env
 .vscode/
 node_modules/

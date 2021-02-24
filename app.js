@@ -1,4 +1,5 @@
-require('dotenv').config();
+process.title = "osu-stocks";
+require("dotenv").config();
 const querystring = require("querystring");
 const fetch = require("node-fetch");
 const cookieParser = require("cookie-parser");
@@ -11,14 +12,8 @@ const app = express();
 const fs = require("fs");
 //const mongo = require('mongodb');
 
-const privateKey = fs.readFileSync(
-  process.env.PRIVKEYPATH,
-  "utf8"
-);
-const certificate = fs.readFileSync(
-  process.env.CERTPATH,
-  "utf8"
-);
+const privateKey = fs.readFileSync(process.env.PRIVKEYPATH, "utf8");
+const certificate = fs.readFileSync(process.env.CERTPATH, "utf8");
 
 const rootdir = process.env.ROOTDIR;
 
@@ -34,9 +29,35 @@ var url = "mongodb://localhost:27017/osu-stocks";
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
+
+var stocks = {};
+var users = {};
+
+MongoClient.connect(url, function (err, db) {
+  if (err) throw err;
+  var dbo = db.db("osu-stocks");
+  dbo
+    .collection("inventory")
+    .find({})
+    .toArray(function (err, result) {
+      if (err) throw err;
+      for (stock in result) stocks[result[stock].user.user.id.toString()] = result[stock];
+      //console.log(stocks);
+    });
+  dbo
+    .collection("users")
+    .find({})
+    .toArray(function (err, result) {
+      if (err) throw err;
+      db.close;
+      for (user in result) users[result[user].user.id.toString()] = result[user];
+    });
+});
+
+
 function find_user(user, res) {
   var res;
-  MongoClient.connect(url, { useUnifiedTopology: true }, function (err, db) {
+  MongoClient.connect(url, function (err, db) {
     if (err) throw err;
     var dbo = db.db("osu-stocks");
     var query = { "user.user.username": user };
@@ -65,7 +86,7 @@ async function get_stock(stock, res) {
 }
 
 function get_leaderboard(res) {
-  MongoClient.connect(url, { useUnifiedTopology: true }, function (err, db) {
+  MongoClient.connect(url, function (err, db) {
     if (err) throw err;
     var dbo = db.db("osu-stocks");
     var query = {};
@@ -128,7 +149,7 @@ function get_token() {
       client_secret: client_secret,
       grant_type: "refresh_token",
       scope: "public",
-      refresh_token: refresh_token,
+      refresh_token: cc_refresh_token,
     },
     json: true,
   };
@@ -145,7 +166,7 @@ function get_token() {
 
 async function first_leaderboard(page) {
   if (page) {
-    console.log("page", page);
+    //console.log("page", page);
     var options = {
       url:
         "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
@@ -159,6 +180,7 @@ async function first_leaderboard(page) {
       });
       json = await response.json();
       var myobj = json.ranking;
+      //update_stocks(myobj);
       var db = await MongoClient.connect(url);
       var dbo = await db.db("osu-stocks");
       for (var i = 0; i < myobj.length; i++) {
@@ -169,21 +191,19 @@ async function first_leaderboard(page) {
           console.log("new user added: ", myobj[i].user.id);
           var db2 = await MongoClient.connect(url);
           var dbo2 = await db.db("osu-stocks");
-          await dbo2
-            .collection("inventory")
-            .insertOne({
-              user: myobj[i],
-              shares: { total: 100000, bought: 0 },
-              price: myobj[i].pp / 100,
-              "pp-30": [{ date: Date.now(), pp: myobj[i].pp }],
-            });
+          await dbo2.collection("inventory").insertOne({
+            user: myobj[i],
+            shares: { total: 100000, bought: 0 },
+            price: myobj[i].pp / 100,
+            "pp-30": [{ date: Date.now(), pp: myobj[i].pp }],
+          });
           await db2.close();
         }
       }
       await db.close();
       if (json.cursor) setTimeout(first_leaderboard, 1000, json.cursor.page);
       else {
-        console.log("done");
+        console.log("made leaderboard.");
         setTimeout(update_leaderboard, 1000, 1);
       }
     } catch (error) {
@@ -192,9 +212,56 @@ async function first_leaderboard(page) {
   }
 }
 
+async function update_stocks(ranking) {
+  var db = await MongoClient.connect(url);
+  var dbo = await db.db("osu-stocks");
+  for (stock in ranking) {
+    var id_str = ranking[stock].user.id.toString();
+    stocks[id_str].user = ranking[stock];
+    var counter = 0;
+    for (j in stocks[id_str]["pp-30"]) {
+      if (Date.now() - stocks[id_str]["pp-30"][j].date > 2592000000) {
+        counter++;
+      } else {
+        break;
+      }
+    }
+    for (j = 0; j < counter; j++) {
+      stocks[id_str]["pp-30"].shift();
+    }
+
+    var market_multiplier =
+      1 /
+      (1 -
+        stocks[id_str].shares.bought /
+          stocks[id_str].shares.total);
+    var price =
+      (ranking[stock].pp /
+        (0.5 -
+          (ranking[stock].pp - stocks[id_str]["pp-30"][0].pp) /
+            stocks[id_str]["pp-30"][0].pp) /
+        200) *
+      market_multiplier;
+    stocks[id_str].price = price;
+    //console.log(stocks[id_str]);
+    var last_daypp_30 =
+      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1];
+    if (last_daypp_30.date < Date.now() - 86400000) {
+      stocks[id_str]["pp-30"].push({
+        date: Date.now(),
+        pp: ranking[stock].pp,
+      });
+    }
+    await dbo
+      .collection("inventory")
+      .replaceOne({ _id: stocks[id_str]._id }, stocks[id_str]);
+  }
+  await db.close();
+}
+
 async function update_leaderboard(page) {
   if (page) {
-    console.log("page", page);
+    //console.log("page", page);
     var options = {
       url:
         "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
@@ -208,7 +275,7 @@ async function update_leaderboard(page) {
       });
       json = await response.json();
       var myobj = json.ranking;
-      var db = await MongoClient.connect(url);
+      /**var db = await MongoClient.connect(url);
       var dbo = await db.db("osu-stocks");
       for (var i = 0; i < myobj.length; i++) {
         //console.log(myobj[i].global_rank);
@@ -243,7 +310,7 @@ async function update_leaderboard(page) {
                 }
                 for(j=0;j<counter;j++) {
                     pp30["daypp-30"].shift();
-                }**/
+                }**//**
         var last_daypp_30 = pp30["pp-30"][pp30["pp-30"].length - 1];
         if (
           pp30["pp-30"][pp30["pp-30"].length - 1].date <
@@ -251,21 +318,19 @@ async function update_leaderboard(page) {
         ) {
           var db2 = await MongoClient.connect(url);
           var dbo2 = await db.db("osu-stocks");
-          await dbo2
-            .collection("inventory")
-            .updateOne(
-              { "user.user.id": myobj[i].user.id },
-              {
-                $set: {
-                  price: price,
-                  "pp-30": pp30["pp-30"].concat({
-                    date: Date.now(),
-                    pp: myobj[i].pp,
-                  }),
-                  user: myobj[i],
-                },
-              }
-            );
+          await dbo2.collection("inventory").updateOne(
+            { "user.user.id": myobj[i].user.id },
+            {
+              $set: {
+                price: price,
+                "pp-30": pp30["pp-30"].concat({
+                  date: Date.now(),
+                  pp: myobj[i].pp,
+                }),
+                user: myobj[i],
+              },
+            }
+          );
         } else {
           var db2 = await MongoClient.connect(url);
           var dbo2 = await db.db("osu-stocks");
@@ -278,12 +343,15 @@ async function update_leaderboard(page) {
         }
         await db2.close();
       }
-      await db.close();
-      if (json.cursor) setTimeout(update_leaderboard, 1000, json.cursor.page);
-      else {
-        console.log("done");
-        setTimeout(update_leaderboard, 1000, 1);
-      }
+      await db.close();*/
+      update_stocks(myobj).then(() => {
+        if (json.cursor) setTimeout(update_leaderboard, 500, json.cursor.page);
+        else {
+          console.log("updated leaderboard.");
+          setTimeout(update_leaderboard, 500, 1);
+        }
+      });
+      
     } catch (error) {
       console.log("error" + error);
     }
@@ -333,8 +401,9 @@ async function get_user(access_token, id, res) {
   console.log(id);
   var db = await MongoClient.connect(url);
   var dbo = await db.db("osu-stocks");
-  var dbres = await dbo.collection("users").findOne(
-      { "user.id": parseInt(id) });
+  var dbres = await dbo
+    .collection("users")
+    .findOne({ "user.id": parseInt(id) });
   res.send(dbres.user);
 }
 
@@ -401,11 +470,12 @@ app.get("/callback", function (req, res) {
         };
         res.cookie("access_token", access_token, accessCookieParams);
         res.cookie("refresh_token", refresh_token, cookieParams);
+        console.log(refresh_token);
         var options = {
           url: "https://osu.ppy.sh/api/v2/me/osu",
           headers: { Authorization: "Bearer " + access_token },
         };
-        request.get(options, function(error, response, body){
+        request.get(options, function (error, response, body) {
           var result = JSON.parse(body);
           console.log(result);
           res.cookie("session", result.id, cookieParams);
@@ -414,7 +484,6 @@ app.get("/callback", function (req, res) {
         });
         //console.log(state);
         //if (state) res.redirect(state);
-        
       } else {
         res.redirect(
           "/#" +
@@ -437,11 +506,11 @@ app.get("/callback", function (req, res) {
 async function login_user(userres) {
   var db = await MongoClient.connect(url);
   var dbo = await db.db("osu-stocks");
-  var dbres = await dbo.collection("users").findOne(
-      { "user.id": userres.id });
-  if(json.id && !dbres) await dbo
-    .collection("users")
-    .insertOne({user: userres, shares: {}, net_worth: 0});
+  var dbres = await dbo.collection("users").findOne({ "user.id": userres.id });
+  if (json.id && !dbres)
+    await dbo
+      .collection("users")
+      .insertOne({ user: userres, shares: {}, net_worth: 0 });
 }
 
 app.get("/refresh_token", function (req, res) {

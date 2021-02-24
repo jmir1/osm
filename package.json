@@ -4,7 +4,9 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "node app.js"
+    "start": "node app.js | ts >> app.log 2>&1 &",
+    "test": "node app.js | ts",
+    "stop": "pkill -9 -f osu-stocks"
   },
   "author": "jmir",
   "license": "GPL-3.0-or-later",

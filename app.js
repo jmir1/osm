@@ -271,79 +271,8 @@ async function update_leaderboard(page) {
         headers: options.headers,
       });
       json = await response.json();
-      var myobj =
-        json.ranking; /**
-        var last_daypp_30 = pp30["pp-30"][pp30["pp-30"].length - 1];
-        if (
-          pp30["pp-30"][pp30["pp-30"].length - 1].date <
-          Date.now() - 86400000
-        ) {
-          var db2 = await MongoClient.connect(url);
-          var dbo2 = await db.db("osu-stocks");
-          await dbo2.collection("inventory").updateOne(
-            { "user.user.id": myobj[i].user.id },
-            {
-              $set: {
-                price: price,
-                "pp-30": pp30["pp-30"].concat({
-                  date: Date.now(),
-                  pp: myobj[i].pp,
-                }),
-                user: myobj[i],
-              },
-            }
-          );
-        } else {
-          var db2 = await MongoClient.connect(url);
-          var dbo2 = await db.db("osu-stocks");
-          await dbo2
-            .collection("inventory")
-            .updateOne(
-              { "user.user.id": myobj[i].user.id },
-              { $set: { price: price, user: myobj[i] } }
-            );
-        }
-        await db2.close();
-      }
-      await db.close();*/
-      /**var db = await MongoClient.connect(url);
-      var dbo = await db.db("osu-stocks");
-      for (var i = 0; i < myobj.length; i++) {
-        //console.log(myobj[i].global_rank);
-        var pp30 = await dbo
-          .collection("inventory")
-          .findOne({ "user.user.id": myobj[i].user.id });
-        //console.log(pp30["pp-30"]);
-        var market_multiplier =
-          1 / (1 - pp30.shares.bought / pp30.shares.total);
-        var price =
-          (myobj[i].pp /
-            (0.5 - (myobj[i].pp - pp30["pp-30"][0].pp) / pp30["pp-30"][0].pp) /
-            200) *
-          market_multiplier;
-        var counter = 0;
-        for (j in pp30["pp-30"]) {
-          if (Date.now() - pp30["pp-30"][j].date > 2592000000) {
-            counter++;
-          } else {
-            break;
-          }
-        }
-        for (j = 0; j < counter; j++) {
-          pp30["pp-30"].shift();
-        } /**
-                for(j in pp30["daypp-30"]) {
-                    if((Date.now() - pp30["daypp-30"][j].date) > 2592000000) {
-                        counter++;
-                    } else {
-                        break;
-                    }
-                }
-                for(j=0;j<counter;j++) {
-                    pp30["daypp-30"].shift();
-                }**/ update_stocks(
-        myobj
-      ).then(() => {
+      var myobj = json.ranking;
+      update_stocks(myobj).then(() => {
         if (json.cursor) setTimeout(update_leaderboard, 500, json.cursor.page);
         else {
           console.log("updated leaderboard.");

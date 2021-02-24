@@ -310,7 +310,7 @@ app.get("/me", function (req, res) {
 });
 
 async function get_user(access_token, id, res) {
-  /**var options = {
+  var options = {
     url: "https://osu.ppy.sh/api/v2/me/osu",
     headers: { Authorization: "Bearer " + access_token },
   };
@@ -324,14 +324,14 @@ async function get_user(access_token, id, res) {
   } catch (error) {
     console.log("error" + error);
     res.send("error" + error);
-  }**/
+  }/**
   console.log(id);
   var db = await MongoClient.connect(url);
   var dbo = await db.db("osu-stocks");
   var dbres = await dbo
     .collection("users")
     .findOne({ "user.id": parseInt(id) });
-  res.send(dbres.user);
+  res.send(dbres.user);**/
 }
 
 app.get("/rankings", function (req, res) {

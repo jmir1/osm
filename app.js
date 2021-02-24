@@ -29,7 +29,6 @@ var url = "mongodb://localhost:27017/osu-stocks";
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
-
 var stocks = {};
 var users = {};
 
@@ -41,7 +40,8 @@ MongoClient.connect(url, function (err, db) {
     .find({})
     .toArray(function (err, result) {
       if (err) throw err;
-      for (stock in result) stocks[result[stock].user.user.id.toString()] = result[stock];
+      for (stock in result)
+        stocks[result[stock].user.user.id.toString()] = result[stock];
       //console.log(stocks);
     });
   dbo
@@ -50,10 +50,10 @@ MongoClient.connect(url, function (err, db) {
     .toArray(function (err, result) {
       if (err) throw err;
       db.close;
-      for (user in result) users[result[user].user.id.toString()] = result[user];
+      for (user in result)
+        users[result[user].user.id.toString()] = result[user];
     });
 });
-
 
 function find_user(user, res) {
   var res;
@@ -231,10 +231,7 @@ async function update_stocks(ranking) {
     }
 
     var market_multiplier =
-      1 /
-      (1 -
-        stocks[id_str].shares.bought /
-          stocks[id_str].shares.total);
+      1 / (1 - stocks[id_str].shares.bought / stocks[id_str].shares.total);
     var price =
       (ranking[stock].pp /
         (0.5 -
@@ -274,7 +271,41 @@ async function update_leaderboard(page) {
         headers: options.headers,
       });
       json = await response.json();
-      var myobj = json.ranking;
+      var myobj =
+        json.ranking; /**
+        var last_daypp_30 = pp30["pp-30"][pp30["pp-30"].length - 1];
+        if (
+          pp30["pp-30"][pp30["pp-30"].length - 1].date <
+          Date.now() - 86400000
+        ) {
+          var db2 = await MongoClient.connect(url);
+          var dbo2 = await db.db("osu-stocks");
+          await dbo2.collection("inventory").updateOne(
+            { "user.user.id": myobj[i].user.id },
+            {
+              $set: {
+                price: price,
+                "pp-30": pp30["pp-30"].concat({
+                  date: Date.now(),
+                  pp: myobj[i].pp,
+                }),
+                user: myobj[i],
+              },
+            }
+          );
+        } else {
+          var db2 = await MongoClient.connect(url);
+          var dbo2 = await db.db("osu-stocks");
+          await dbo2
+            .collection("inventory")
+            .updateOne(
+              { "user.user.id": myobj[i].user.id },
+              { $set: { price: price, user: myobj[i] } }
+            );
+        }
+        await db2.close();
+      }
+      await db.close();*/
       /**var db = await MongoClient.connect(url);
       var dbo = await db.db("osu-stocks");
       for (var i = 0; i < myobj.length; i++) {
@@ -310,48 +341,15 @@ async function update_leaderboard(page) {
                 }
                 for(j=0;j<counter;j++) {
                     pp30["daypp-30"].shift();
-                }**//**
-        var last_daypp_30 = pp30["pp-30"][pp30["pp-30"].length - 1];
-        if (
-          pp30["pp-30"][pp30["pp-30"].length - 1].date <
-          Date.now() - 86400000
-        ) {
-          var db2 = await MongoClient.connect(url);
-          var dbo2 = await db.db("osu-stocks");
-          await dbo2.collection("inventory").updateOne(
-            { "user.user.id": myobj[i].user.id },
-            {
-              $set: {
-                price: price,
-                "pp-30": pp30["pp-30"].concat({
-                  date: Date.now(),
-                  pp: myobj[i].pp,
-                }),
-                user: myobj[i],
-              },
-            }
-          );
-        } else {
-          var db2 = await MongoClient.connect(url);
-          var dbo2 = await db.db("osu-stocks");
-          await dbo2
-            .collection("inventory")
-            .updateOne(
-              { "user.user.id": myobj[i].user.id },
-              { $set: { price: price, user: myobj[i] } }
-            );
-        }
-        await db2.close();
-      }
-      await db.close();*/
-      update_stocks(myobj).then(() => {
+                }**/ update_stocks(
+        myobj
+      ).then(() => {
         if (json.cursor) setTimeout(update_leaderboard, 500, json.cursor.page);
         else {
           console.log("updated leaderboard.");
           setTimeout(update_leaderboard, 500, 1);
         }
       });
-      
     } catch (error) {
       console.log("error" + error);
     }

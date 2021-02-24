@@ -341,7 +341,7 @@ app.get("/login", function (req, res) {
   var referer = req.header("Referer") || "https://stocks.jmir.xyz";
 
   if (req.signedCookies["access_token"]) {
-    res.redirect(referer);
+    res.redirect("/me");
   } else if (req.signedCookies["refresh_token"]) {
     res.redirect("/refresh_token");
   } else {
@@ -443,7 +443,7 @@ async function login_user(userres) {
 app.get("/refresh_token", function (req, res) {
   var referer = req.get("Referer") || "/me";
   if (req.cookies["access_token"]) {
-    res.redirect(referer);
+    res.redirect("/me");
   } else {
     // requesting access token from refresh token
     var options = {

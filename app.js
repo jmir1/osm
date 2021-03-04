@@ -31,29 +31,30 @@ app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
 var stocks = {};
 var users = {};
-
-MongoClient.connect(url, function (err, db) {
-  if (err) throw err;
-  var dbo = db.db("osu-stocks");
-  dbo
-    .collection("inventory")
-    .find({})
-    .toArray(function (err, result) {
-      if (err) throw err;
-      for (stock in result)
-        stocks[result[stock].user.user.id.toString()] = result[stock];
-      //console.log(stocks);
-    });
-  dbo
-    .collection("users")
-    .find({})
-    .toArray(function (err, result) {
-      if (err) throw err;
-      db.close;
-      for (user in result)
-        users[result[user].user.id.toString()] = result[user];
-    });
-});
+function initialize_objects() {
+  MongoClient.connect(url, function (err, db) {
+    if (err) throw err;
+    var dbo = db.db("osu-stocks");
+    dbo
+      .collection("inventory")
+      .find({})
+      .toArray(function (err, result) {
+        if (err) throw err;
+        for (stock in result)
+          stocks[result[stock].user.user.id.toString()] = result[stock];
+        //console.log(stocks);
+      });
+    dbo
+      .collection("users")
+      .find({})
+      .toArray(function (err, result) {
+        if (err) throw err;
+        db.close;
+        for (user in result)
+          users[result[user].user.id.toString()] = result[user];
+      });
+  });
+}
 
 function find_user(user, res) {
   var res;
@@ -115,6 +116,7 @@ function get_leaderboard(res) {
       });
   });
 }
+
 var cc_refresh_token = fs.readFileSync(rootdir + "/refresh_token", "utf8");
 var cc_access_token;
 (function first_token() {
@@ -136,6 +138,7 @@ var cc_access_token;
       cc_refresh_token = body.refresh_token;
       fs.writeFileSync(rootdir + "/refresh_token", body.refresh_token);
       first_leaderboard(1);
+      //get_users();
     } else console.log("error authenticating");
   });
   setTimeout(get_token, 8640000);
@@ -162,6 +165,25 @@ function get_token() {
     } else console.log("error authenticating");
   });
   setTimeout(get_token, 8640000);
+}
+
+async function get_users() {
+  for (const [key, value] of Object.entries(users)) {
+    var options = {
+      url: `https://osu.ppy.sh/api/v2/users/${key}/osu`,
+      headers: { Authorization: "Bearer " + cc_access_token },
+    };
+    try {
+      const response = await fetch(options.url, {
+        method: "GET",
+        headers: options.headers,
+      });
+      json = await response.json();
+      users[key].user = json;
+    } catch (error) {
+      console.log("error" + error);
+    }
+  }
 }
 
 async function first_leaderboard(page) {
@@ -204,6 +226,7 @@ async function first_leaderboard(page) {
       if (json.cursor) setTimeout(first_leaderboard, 1000, json.cursor.page);
       else {
         console.log("made leaderboard.");
+        initialize_objects();
         setTimeout(update_leaderboard, 1000, 1);
       }
     } catch (error) {
@@ -220,7 +243,7 @@ async function update_stocks(ranking) {
     stocks[id_str].user = ranking[stock];
     var counter = 0;
     for (j in stocks[id_str]["pp-30"]) {
-      if (Date.now() - stocks[id_str]["pp-30"][j].date > 2592000000) {
+      if (Date.now() - stocks[id_str]["pp-30"][j].date > 7776000000) {
         counter++;
       } else {
         break;
@@ -232,15 +255,32 @@ async function update_stocks(ranking) {
 
     var market_multiplier =
       1 / (1 - stocks[id_str].shares.bought / stocks[id_str].shares.total);
+    var pp30_thing = 0;
+    var pp30_sum = 0;
+    for (
+      var pp30_idx = 1;
+      pp30_idx < stocks[id_str]["pp-30"].length;
+      pp30_idx++
+    ) {
+      pp30_sum += pp30_idx;
+    }
+    for (
+      var pp30_idx = 0;
+      pp30_idx < stocks[id_str]["pp-30"].length - 1;
+      pp30_idx++
+    ) {
+      pp30_thing +=
+        (stocks[id_str]["pp-30"][pp30_idx + 1].pp -
+          stocks[id_str]["pp-30"][pp30_idx].pp) *
+        (pp30_idx + 1);
+    }
+
+    pp30_thing *= 1 / pp30_sum;
     var price =
-      (ranking[stock].pp /
-        (0.5 -
-          (ranking[stock].pp - stocks[id_str]["pp-30"][0].pp) /
-            stocks[id_str]["pp-30"][0].pp) /
-        200) *
+      ((ranking[stock].pp * (1 + (50 * pp30_thing) / ranking[stock].pp)) /
+        100) *
       market_multiplier;
     stocks[id_str].price = price;
-    //console.log(stocks[id_str]);
     var last_daypp_30 =
       stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1];
     if (last_daypp_30.date < Date.now() - 86400000) {
@@ -307,6 +347,7 @@ app.get("/me", function (req, res) {
   } else {
     res.redirect("/login");
   }
+  //get_users();
 });
 
 async function get_user(access_token, id, res) {
@@ -320,11 +361,12 @@ async function get_user(access_token, id, res) {
       headers: options.headers,
     });
     json = await response.json();
+    //res.send(users[id.toString()]);
     res.send(json);
   } catch (error) {
     console.log("error" + error);
     res.send("error" + error);
-  }/**
+  } /**
   console.log(id);
   var db = await MongoClient.connect(url);
   var dbo = await db.db("osu-stocks");

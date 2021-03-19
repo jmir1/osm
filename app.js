@@ -87,34 +87,27 @@ async function get_stock(stock, res) {
 }
 
 function get_leaderboard(res) {
-  MongoClient.connect(url, function (err, db) {
-    if (err) throw err;
-    var dbo = db.db("osu-stocks");
-    var query = {};
-    var projection = {
-      _id: 0,
-      price: 1,
-      "user.global_rank": 1,
-      "user.pp": 1,
-      "user.user.username": 1,
-    };
-    dbo
-      .collection("inventory")
-      .find(query, { projection: projection })
-      .sort({ price: -1 })
-      .toArray(function (err, result) {
-        if (err) throw err;
-        db.close();
-        var string = "[";
-        for (player in result) {
-          if (player == result.length - 1)
-            string += JSON.stringify(result[player]) + "]";
-          else string += JSON.stringify(result[player]) + ",\n";
-        }
-        res.type("application/json");
-        res.send(string);
-      });
+  var string = "[";
+  var result = [];
+  for (stock in stocks) {
+    console.log(stock);
+    result.push({
+      username: stocks[stock].user.user.username,
+      rank: stocks[stock].user.global_rank,
+      pp: stocks[stock].user.pp,
+      price: stocks[stock].price,
+    });
+  }
+  result.sort(function (a, b) {
+    return b.price - a.price;
   });
+  for (player in result) {
+    if (player == result.length - 1)
+      string += JSON.stringify(result[player]) + "]";
+    else string += JSON.stringify(result[player]) + ",\n";
+  }
+  res.type("application/json");
+  res.send(string);
 }
 
 var cc_refresh_token = fs.readFileSync(rootdir + "/refresh_token", "utf8");

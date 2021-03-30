@@ -18,9 +18,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }} 
       - run: npm install # installs your dependencies
-      - run: 'echo $DOTENV > .env'
+      - run: 'printf "$DOTENV" > .env'
         env:
-          DOTENV: ${{ secrets.DOTENV_FOR_TEST }}
+          DOTENV: ${{ secrets.DOTENV_FOR_TESTING }}
       - run: npm test # runs your test suite
         env:
           CI: true # shows terminal output!

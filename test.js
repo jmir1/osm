@@ -13,9 +13,7 @@ const fs = require("fs");
 const f = require("util").format;
 
 const rootdir = process.env.ROOTDIR;
-
 const cookie_secret = process.env.COOKIE_SECRET;
-
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
 

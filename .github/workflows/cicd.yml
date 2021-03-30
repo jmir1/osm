@@ -18,7 +18,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }} 
       - run: npm install # installs your dependencies
-      - run: echo ${{ secrets.DOTENV_FOR_TEST }} > /home/joelm/.env #please for the love of god work
+      - run: pwd
+      - run: echo ${{ secrets.DOTENV_FOR_TEST }} > .env #please for the love of god work
       - run: npm test # runs your test suite
         env:
           CI: true # shows terminal output!

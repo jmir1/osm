@@ -18,8 +18,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }} 
       - run: npm install # installs your dependencies
-      - run: pwd
       - run: echo ${{ secrets.DOTENV_FOR_TEST }} > .env #please for the love of god work
+      - run: tail -n 1 .env #if this leaks shit i quit
       - run: npm test # runs your test suite
         env:
           CI: true # shows terminal output!

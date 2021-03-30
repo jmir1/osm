@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "app.js",
-  },
   "author": "jmir",
   "license": "GPL-3.0-or-later",
   "dependencies": {

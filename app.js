@@ -21,11 +21,18 @@ const credentials = { key: privateKey, cert: certificate };
 
 const cookie_secret = process.env.COOKIE_SECRET;
 
+var f = require('util').format;
+
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
 
+var user = encodeURIComponent(process.env.DBUSER);
+var password = encodeURIComponent(process.env.DBPASS);
+var authMechanism = 'DEFAULT';
 var MongoClient = require("mongodb").MongoClient;
-var url = "mongodb://localhost:27017/osu-stocks";
+var dburl = process.env.DBURL;
+var url = f('mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s',
+  user, password, dburl, authMechanism);
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 

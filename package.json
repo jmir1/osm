@@ -5,6 +5,10 @@
   "main": "app.js",
   "author": "jmir",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/jmir1/osu-stocks.git"
+  },
   "dependencies": {
     "cookie-encrypter": "^1.0.1",
     "cookie-parser": "^1.4.5",

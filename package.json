@@ -5,6 +5,10 @@
   "main": "app.js",
   "author": "jmir",
   "license": "GPL-3.0-or-later",
+  "scripts":{
+    "start":"node app.js",
+    "test":"node test.js"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/jmir1/osu-stocks.git"

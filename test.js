@@ -1,4 +1,4 @@
-process.title = "osu-stocks";
+process.title = "osu-stocks-test";
 require("dotenv").config();
 const querystring = require("querystring");
 const fetch = require("node-fetch");
@@ -10,14 +10,17 @@ const http = require("http");
 const https = require("https");
 const app = express();
 const fs = require("fs");
-const f = require('util').format;
+const f = require("util").format;
 
 const privateKey = fs.readFileSync(process.env.PRIVKEYPATH, "utf8");
 const certificate = fs.readFileSync(process.env.CERTPATH, "utf8");
 
 const rootdir = process.env.ROOTDIR;
 
-const credentials = { key: privateKey, cert: certificate };
+const credentials = {
+  key: privateKey,
+  cert: certificate
+};
 
 const cookie_secret = process.env.COOKIE_SECRET;
 
@@ -26,16 +29,22 @@ const client_secret = process.env.CLIENT_SECRET;
 
 var dbuser = encodeURIComponent(process.env.DBUSER);
 var dbpassword = encodeURIComponent(process.env.DBPASS);
-var authMechanism = 'DEFAULT';
+var authMechanism = "DEFAULT";
 var MongoClient = require("mongodb").MongoClient;
 var dburl = process.env.DBIP;
-var url = f('mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s',
-  dbuser, dbpassword, dburl, authMechanism);
+var url = f(
+  "mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s",
+  dbuser,
+  dbpassword,
+  dburl,
+  authMechanism
+);
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
 var stocks = {};
 var users = {};
+
 function initialize_objects() {
   MongoClient.connect(url, function (err, db) {
     if (err) throw err;
@@ -66,7 +75,9 @@ function find_user(user, res) {
   MongoClient.connect(url, function (err, db) {
     if (err) throw err;
     var dbo = db.db("osu-stocks");
-    var query = { "user.user.username": user };
+    var query = {
+      "user.user.username": user
+    };
     dbo
       .collection("inventory")
       .find(query)
@@ -83,10 +94,16 @@ async function get_stock(stock, res) {
   var dbo = await db.db("osu-stocks");
   var dbres = await dbo
     .collection("inventory")
-    .findOne(
-      { "user.user.id": parseInt(stock, 10) },
-      { projection: { _id: 0, price: 1, "user.user.username": 1, shares: 1 } }
-    );
+    .findOne({
+      "user.user.id": parseInt(stock, 10)
+    }, {
+      projection: {
+        _id: 0,
+        price: 1,
+        "user.user.username": 1,
+        shares: 1
+      }
+    });
   //console.log(stock, dbres);
   res.send(dbres);
 }
@@ -95,7 +112,7 @@ function get_leaderboard(res) {
   var string = "[";
   var result = [];
   for (stock in stocks) {
-    console.log(stock);
+    //console.log(stock);
     result.push({
       username: stocks[stock].user.user.username,
       rank: stocks[stock].user.global_rank,
@@ -131,13 +148,13 @@ var cc_access_token;
   };
   request.post(options, function (error, response, body) {
     if (!error && response.statusCode === 200) {
-      console.log(body);
+      //console.log(body);
       cc_access_token = body.access_token;
       cc_refresh_token = body.refresh_token;
       fs.writeFileSync(rootdir + "/refresh_token", body.refresh_token);
       first_leaderboard(1);
       //get_users();
-    } else console.log("error authenticating");
+    } else throw "error authenticating";
   });
   setTimeout(get_token, 1800000);
 })();
@@ -156,20 +173,22 @@ function get_token() {
   };
   request.post(options, function (error, response, body) {
     if (!error && response.statusCode === 200) {
-      console.log(body);
+      //console.log(body);
       cc_access_token = body.access_token;
       refresh_token = body.refresh_token;
       fs.writeFileSync(rootdir + "/refresh_token", body.refresh_token);
-    } else console.log("error authenticating");
+    } else throw "error authenticating";
   });
-  setTimeout(get_token, 8640000);
+  setTimeout(get_token, 1800000);
 }
 
 async function get_users() {
   for (const [key, value] of Object.entries(users)) {
     var options = {
       url: `https://osu.ppy.sh/api/v2/users/${key}/osu`,
-      headers: { Authorization: "Bearer " + cc_access_token },
+      headers: {
+        Authorization: "Bearer " + cc_access_token
+      },
     };
     try {
       const response = await fetch(options.url, {
@@ -179,7 +198,7 @@ async function get_users() {
       json = await response.json();
       users[key].user = json;
     } catch (error) {
-      console.log("error" + error);
+      throw "error" + error;
     }
   }
 }
@@ -188,10 +207,11 @@ async function first_leaderboard(page) {
   if (page) {
     //console.log("page", page);
     var options = {
-      url:
-        "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
+      url: "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
         page,
-      headers: { Authorization: "Bearer " + cc_access_token },
+      headers: {
+        Authorization: "Bearer " + cc_access_token
+      },
     };
     try {
       const response = await fetch(options.url, {
@@ -201,26 +221,7 @@ async function first_leaderboard(page) {
       json = await response.json();
       var myobj = json.ranking;
       //update_stocks(myobj);
-      var db = await MongoClient.connect(url);
-      var dbo = await db.db("osu-stocks");
-      for (var i = 0; i < myobj.length; i++) {
-        var players = await dbo
-          .collection("inventory")
-          .findOne({ "user.user.id": myobj[i].user.id });
-        if (!players && myobj[i]) {
-          console.log("new user added: ", myobj[i].user.id);
-          var db2 = await MongoClient.connect(url);
-          var dbo2 = await db.db("osu-stocks");
-          await dbo2.collection("inventory").insertOne({
-            user: myobj[i],
-            shares: { total: 100000, bought: 0 },
-            price: myobj[i].pp / 100,
-            "pp-30": [{ date: Date.now(), pp: myobj[i].pp }],
-          });
-          await db2.close();
-        }
-      }
-      await db.close();
+
       if (json.cursor) setTimeout(first_leaderboard, 1000, json.cursor.page);
       else {
         console.log("made leaderboard.");
@@ -228,14 +229,12 @@ async function first_leaderboard(page) {
         setTimeout(update_leaderboard, 1000, 1);
       }
     } catch (error) {
-      console.log("error" + error);
+      throw "error" + error;
     }
   }
 }
 
 async function update_stocks(ranking) {
-  var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
   for (stock in ranking) {
     var id_str = ranking[stock].user.id.toString();
     stocks[id_str].user = ranking[stock];
@@ -256,16 +255,12 @@ async function update_stocks(ranking) {
     var pp30_thing = 0;
     var pp30_sum = 0;
     for (
-      var pp30_idx = 1;
-      pp30_idx < stocks[id_str]["pp-30"].length;
-      pp30_idx++
+      var pp30_idx = 1; pp30_idx < stocks[id_str]["pp-30"].length; pp30_idx++
     ) {
       pp30_sum += pp30_idx;
     }
     for (
-      var pp30_idx = 0;
-      pp30_idx < stocks[id_str]["pp-30"].length - 1;
-      pp30_idx++
+      var pp30_idx = 0; pp30_idx < stocks[id_str]["pp-30"].length - 1; pp30_idx++
     ) {
       pp30_thing +=
         (stocks[id_str]["pp-30"][pp30_idx + 1].pp -
@@ -287,21 +282,18 @@ async function update_stocks(ranking) {
         pp: ranking[stock].pp,
       });
     }
-    await dbo
-      .collection("inventory")
-      .replaceOne({ _id: stocks[id_str]._id }, stocks[id_str]);
   }
-  await db.close();
 }
 
 async function update_leaderboard(page) {
   if (page) {
     //console.log("page", page);
     var options = {
-      url:
-        "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
+      url: "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
         page,
-      headers: { Authorization: "Bearer " + cc_access_token },
+      headers: {
+        Authorization: "Bearer " + cc_access_token
+      },
     };
     try {
       const response = await fetch(options.url, {
@@ -313,12 +305,18 @@ async function update_leaderboard(page) {
       update_stocks(myobj).then(() => {
         if (json.cursor) setTimeout(update_leaderboard, 500, json.cursor.page);
         else {
-          console.log("updated leaderboard.");
-          setTimeout(update_leaderboard, 500, 1);
+          request.get({url:"http://localhost:8480"}, function (error, response, body) {
+            console.log("first on leaderboard: ", JSON.parse(body)[0]);
+            console.log("test passed.");
+            httpsServer.close();
+            httpServer.close();
+            process.exit(0);
+          });
+
         }
       });
     } catch (error) {
-      console.log("error" + error);
+      throw "error" + error;
     }
   }
 }
@@ -351,7 +349,9 @@ app.get("/me", function (req, res) {
 async function get_user(access_token, id, res) {
   var options = {
     url: "https://osu.ppy.sh/api/v2/me/osu",
-    headers: { Authorization: "Bearer " + access_token },
+    headers: {
+      Authorization: "Bearer " + access_token
+    },
   };
   try {
     const response = await fetch(options.url, {
@@ -364,14 +364,15 @@ async function get_user(access_token, id, res) {
   } catch (error) {
     console.log("error" + error);
     res.send("error" + error);
-  } /**
-  console.log(id);
-  var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
-  var dbres = await dbo
-    .collection("users")
-    .findOne({ "user.id": parseInt(id) });
-  res.send(dbres.user);**/
+  }
+  /**
+   console.log(id);
+   var db = await MongoClient.connect(url);
+   var dbo = await db.db("osu-stocks");
+   var dbres = await dbo
+     .collection("users")
+     .findOne({ "user.id": parseInt(id) });
+   res.send(dbres.user);**/
 }
 
 app.get("/rankings", function (req, res) {
@@ -388,13 +389,13 @@ app.get("/login", function (req, res) {
     // your application requests authorization
     res.redirect(
       "https://osu.ppy.sh/oauth/authorize?" +
-        querystring.stringify({
-          response_type: "code",
-          client_id: client_id,
-          state: "state",
-          scope: "public identify",
-          redirect_uri: "https://stocks.jmir.xyz/callback",
-        })
+      querystring.stringify({
+        response_type: "code",
+        client_id: client_id,
+        state: "state",
+        scope: "public identify",
+        redirect_uri: "https://stocks.jmir.xyz/callback",
+      })
     );
   }
 });
@@ -437,14 +438,16 @@ app.get("/callback", function (req, res) {
         };
         res.cookie("access_token", access_token, accessCookieParams);
         res.cookie("refresh_token", refresh_token, cookieParams);
-        console.log(refresh_token);
+        //console.log(refresh_token);
         var options = {
           url: "https://osu.ppy.sh/api/v2/me/osu",
-          headers: { Authorization: "Bearer " + access_token },
+          headers: {
+            Authorization: "Bearer " + access_token
+          },
         };
         request.get(options, function (error, response, body) {
           var result = JSON.parse(body);
-          console.log(result);
+          //console.log(result);
           res.cookie("session", result.id, cookieParams);
           login_user(result);
           res.redirect("/me");
@@ -454,18 +457,18 @@ app.get("/callback", function (req, res) {
       } else {
         res.redirect(
           "/#" +
-            querystring.stringify({
-              error: error,
-            })
+          querystring.stringify({
+            error: error,
+          })
         );
       }
     });
   } else {
     res.redirect(
       "/#" +
-        querystring.stringify({
-          error: error,
-        })
+      querystring.stringify({
+        error: error,
+      })
     );
   }
 });
@@ -473,11 +476,17 @@ app.get("/callback", function (req, res) {
 async function login_user(userres) {
   var db = await MongoClient.connect(url);
   var dbo = await db.db("osu-stocks");
-  var dbres = await dbo.collection("users").findOne({ "user.id": userres.id });
+  var dbres = await dbo.collection("users").findOne({
+    "user.id": userres.id
+  });
   if (json.id && !dbres)
     await dbo
-      .collection("users")
-      .insertOne({ user: userres, shares: {}, net_worth: 0 });
+    .collection("users")
+    .insertOne({
+      user: userres,
+      shares: {},
+      net_worth: 0
+    });
 }
 
 app.get("/refresh_token", function (req, res) {
@@ -498,7 +507,7 @@ app.get("/refresh_token", function (req, res) {
       json: true,
     };
     request.post(options, function (error, response, body) {
-      console.log(error, body);
+      //console.log(error, body);
       if (!error && response.statusCode === 200) {
         var access_token = body.access_token;
         refresh_token = body.refresh_token;

@@ -12,15 +12,7 @@ const app = express();
 const fs = require("fs");
 const f = require("util").format;
 
-const privateKey = fs.readFileSync(process.env.PRIVKEYPATH, "utf8");
-const certificate = fs.readFileSync(process.env.CERTPATH, "utf8");
-
 const rootdir = process.env.ROOTDIR;
-
-const credentials = {
-  key: privateKey,
-  cert: certificate
-};
 
 const cookie_secret = process.env.COOKIE_SECRET;
 
@@ -531,6 +523,4 @@ app.get("/refresh_token", function (req, res) {
 });
 
 const httpServer = http.createServer(app);
-const httpsServer = https.createServer(credentials, app);
-httpsServer.listen(8444);
 httpServer.listen(8480);

@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }} 
       - run: npm install # installs your dependencies
-      - run: printf "::add-mask::lol" > .env
+      - run: echo ${{ secrets.DOTENV_FOR_TEST }} > .env #please for the love of god dont leak my secrets
       - run: npm test # runs your test suite
         env:
           CI: true # shows terminal output!

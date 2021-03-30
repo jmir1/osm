@@ -134,7 +134,7 @@ var cc_access_token;
       //get_users();
     } else console.log("error authenticating");
   });
-  setTimeout(get_token, 8640000);
+  setTimeout(get_token, 1800000);
 })();
 
 function get_token() {

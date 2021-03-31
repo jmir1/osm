@@ -314,10 +314,10 @@ async function update_leaderboard(page) {
 //app.use(express.static('.'));
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
+app.use(express.static("/home/joelm/osu-stocks/pubdir/"));
+
 app.get("/", function (req, res) {
-  //find_user("mrekk", res);
-  //res.redirect("/stock?stock=4504101");
-  get_leaderboard(res);
+  res.sendFile("/home/joelm/osu-stocks/pubdir/" + 'index.html');
 });
 
 app.get("/stock", function (req, res) {

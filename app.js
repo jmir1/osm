@@ -80,7 +80,7 @@ function find_user(user, res) {
 
 async function get_stock(stock, res) {
   var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
+  var dbo = db.db("osu-stocks");
   var dbres = await dbo
     .collection("inventory")
     .findOne(
@@ -202,7 +202,7 @@ async function first_leaderboard(page) {
       var myobj = json.ranking;
       //update_stocks(myobj);
       var db = await MongoClient.connect(url);
-      var dbo = await db.db("osu-stocks");
+      var dbo = db.db("osu-stocks");
       for (var i = 0; i < myobj.length; i++) {
         var players = await dbo
           .collection("inventory")
@@ -210,7 +210,7 @@ async function first_leaderboard(page) {
         if (!players && myobj[i]) {
           console.log("new user added: ", myobj[i].user.id);
           var db2 = await MongoClient.connect(url);
-          var dbo2 = await db.db("osu-stocks");
+          var dbo2 = db.db("osu-stocks");
           await dbo2.collection("inventory").insertOne({
             user: myobj[i],
             shares: { total: 100000, bought: 0 },
@@ -235,7 +235,7 @@ async function first_leaderboard(page) {
 
 async function update_stocks(ranking) {
   var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
+  var dbo = db.db("osu-stocks");
   for (stock in ranking) {
     var id_str = ranking[stock].user.id.toString();
     stocks[id_str].user = ranking[stock];
@@ -401,10 +401,8 @@ app.get("/login", function (req, res) {
 
 app.get("/callback", function (req, res) {
   // your application requests refresh and access tokens
-  // after checking the state parameter
 
   var code = req.query.code || null;
-  var state = req.query.state || null;
   if (code) {
     //console.log(state, code);
     var authOptions = {
@@ -421,10 +419,9 @@ app.get("/callback", function (req, res) {
 
     request.post(authOptions, function (error, response, body) {
       if (!error && response.statusCode === 200) {
-        //console.log(body);
         var access_token = body.access_token,
-          refresh_token = body.refresh_token,
-          expires_in = body.expires_in;
+          refresh_token = body.refresh_token;
+          //expires_in = body.expires_in;
         var cookieParams = {
           signed: true,
           httpOnly: true,
@@ -455,7 +452,7 @@ app.get("/callback", function (req, res) {
         res.redirect(
           "/#" +
             querystring.stringify({
-              error: error,
+              error: "error",
             })
         );
       }
@@ -464,7 +461,7 @@ app.get("/callback", function (req, res) {
     res.redirect(
       "/#" +
         querystring.stringify({
-          error: error,
+          error: "error",
         })
     );
   }
@@ -472,7 +469,7 @@ app.get("/callback", function (req, res) {
 
 async function login_user(userres) {
   var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
+  var dbo = db.db("osu-stocks");
   var dbres = await dbo.collection("users").findOne({ "user.id": userres.id });
   if (json.id && !dbres)
     await dbo

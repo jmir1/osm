@@ -39,7 +39,7 @@ var users = {};
 function initialize_objects() {
   MongoClient.connect(url, function (err, db) {
     if (err) throw err;
-    var dbo = await db.db("osu-stocks");
+    var dbo = db.db("osu-stocks");
     dbo
       .collection("inventory")
       .find({})
@@ -65,7 +65,7 @@ function find_user(user, res) {
   var res;
   MongoClient.connect(url, function (err, db) {
     if (err) throw err;
-    var dbo = await db.db("osu-stocks");
+    var dbo = db.db("osu-stocks");
     var query = { "user.user.username": user };
     dbo
       .collection("inventory")

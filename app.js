@@ -314,11 +314,8 @@ async function update_leaderboard(page) {
 //app.use(express.static('.'));
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
-app.use(express.static("/home/joelm/osu-stocks/pubdir/"));
+app.use(express.static(rootdir + "/pubdir"));
 
-app.get("/", function (req, res) {
-  res.sendFile("/home/joelm/osu-stocks/pubdir/" + 'index.html');
-});
 
 app.get("/stock", function (req, res) {
   var stock = req.query.stock;

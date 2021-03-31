@@ -87,6 +87,7 @@ async function get_stock(stock, res) {
       { "user.user.id": parseInt(stock, 10) },
       { projection: { _id: 0, price: 1, "user.user.username": 1, shares: 1 } }
     );
+  await db.close();
   //console.log(stock, dbres);
   res.send(dbres);
 }
@@ -210,7 +211,7 @@ async function first_leaderboard(page) {
         if (!players && myobj[i]) {
           console.log("new user added: ", myobj[i].user.id);
           var db2 = await MongoClient.connect(url);
-          var dbo2 = db.db("osu-stocks");
+          var dbo2 = await db2.db("osu-stocks");
           await dbo2.collection("inventory").insertOne({
             user: myobj[i],
             shares: { total: 100000, bought: 0 },

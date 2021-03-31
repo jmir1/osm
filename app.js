@@ -34,12 +34,16 @@ var url = f('mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s',
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
+var dbo;
+
+MongoClient.connect(url, function (err, db) {
+  if (err) throw err;
+  dbo = db.db("osu-stocks");
+});
+
 var stocks = {};
 var users = {};
 function initialize_objects() {
-  MongoClient.connect(url, function (err, db) {
-    if (err) throw err;
-    var dbo = db.db("osu-stocks");
     dbo
       .collection("inventory")
       .find({})
@@ -54,16 +58,13 @@ function initialize_objects() {
       .find({})
       .toArray(function (err, result) {
         if (err) throw err;
-        db.close;
         for (user in result)
           users[result[user].user.id.toString()] = result[user];
       });
-  });
 }
 
 function find_user(user, res) {
   var res;
-  MongoClient.connect(url, function (err, db) {
     if (err) throw err;
     var dbo = db.db("osu-stocks");
     var query = { "user.user.username": user };
@@ -72,22 +73,17 @@ function find_user(user, res) {
       .find(query)
       .toArray(function (err, result) {
         if (err) throw err;
-        db.close();
         res.send(result);
       });
-  });
 }
 
 async function get_stock(stock, res) {
-  var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
   var dbres = await dbo
     .collection("inventory")
     .findOne(
       { "user.user.id": parseInt(stock, 10) },
       { projection: { _id: 0, price: 1, "user.user.username": 1, shares: 1 } }
     );
-  await db.close();
   //console.log(stock, dbres);
   res.send(dbres);
 }
@@ -202,26 +198,20 @@ async function first_leaderboard(page) {
       json = await response.json();
       var myobj = json.ranking;
       //update_stocks(myobj);
-      var db = await MongoClient.connect(url);
-      var dbo = await db.db("osu-stocks");
       for (var i = 0; i < myobj.length; i++) {
         var players = await dbo
           .collection("inventory")
           .findOne({ "user.user.id": myobj[i].user.id });
         if (!players && myobj[i]) {
           console.log("new user added: ", myobj[i].user.id);
-          var db2 = await MongoClient.connect(url);
-          var dbo2 = await db2.db("osu-stocks");
-          await dbo2.collection("inventory").insertOne({
+          await dbo.collection("inventory").insertOne({
             user: myobj[i],
             shares: { total: 100000, bought: 0 },
             price: myobj[i].pp / 100,
             "pp-30": [{ date: Date.now(), pp: myobj[i].pp }],
           });
-          await db2.close();
         }
       }
-      await db.close();
       if (json.cursor) setTimeout(first_leaderboard, 1000, json.cursor.page);
       else {
         console.log("made leaderboard.");
@@ -235,8 +225,6 @@ async function first_leaderboard(page) {
 }
 
 async function update_stocks(ranking) {
-  var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
   for (stock in ranking) {
     var id_str = ranking[stock].user.id.toString();
     stocks[id_str].user = ranking[stock];
@@ -292,7 +280,6 @@ async function update_stocks(ranking) {
       .collection("inventory")
       .replaceOne({ _id: stocks[id_str]._id }, stocks[id_str]);
   }
-  await db.close();
 }
 
 async function update_leaderboard(page) {

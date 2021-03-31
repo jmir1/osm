@@ -39,7 +39,7 @@ var users = {};
 function initialize_objects() {
   MongoClient.connect(url, function (err, db) {
     if (err) throw err;
-    var dbo = db.db("osu-stocks");
+    var dbo = await db.db("osu-stocks");
     dbo
       .collection("inventory")
       .find({})
@@ -65,7 +65,7 @@ function find_user(user, res) {
   var res;
   MongoClient.connect(url, function (err, db) {
     if (err) throw err;
-    var dbo = db.db("osu-stocks");
+    var dbo = await db.db("osu-stocks");
     var query = { "user.user.username": user };
     dbo
       .collection("inventory")
@@ -80,7 +80,7 @@ function find_user(user, res) {
 
 async function get_stock(stock, res) {
   var db = await MongoClient.connect(url);
-  var dbo = db.db("osu-stocks");
+  var dbo = await db.db("osu-stocks");
   var dbres = await dbo
     .collection("inventory")
     .findOne(
@@ -95,7 +95,7 @@ function get_leaderboard(res) {
   var string = "[";
   var result = [];
   for (stock in stocks) {
-    console.log(stock);
+    //console.log(stock);
     result.push({
       username: stocks[stock].user.user.username,
       rank: stocks[stock].user.global_rank,
@@ -202,7 +202,7 @@ async function first_leaderboard(page) {
       var myobj = json.ranking;
       //update_stocks(myobj);
       var db = await MongoClient.connect(url);
-      var dbo = db.db("osu-stocks");
+      var dbo = await db.db("osu-stocks");
       for (var i = 0; i < myobj.length; i++) {
         var players = await dbo
           .collection("inventory")
@@ -235,7 +235,7 @@ async function first_leaderboard(page) {
 
 async function update_stocks(ranking) {
   var db = await MongoClient.connect(url);
-  var dbo = db.db("osu-stocks");
+  var dbo = await db.db("osu-stocks");
   for (stock in ranking) {
     var id_str = ranking[stock].user.id.toString();
     stocks[id_str].user = ranking[stock];
@@ -469,7 +469,7 @@ app.get("/callback", function (req, res) {
 
 async function login_user(userres) {
   var db = await MongoClient.connect(url);
-  var dbo = db.db("osu-stocks");
+  var dbo = await db.db("osu-stocks");
   var dbres = await dbo.collection("users").findOne({ "user.id": userres.id });
   if (json.id && !dbres)
     await dbo

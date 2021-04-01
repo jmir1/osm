@@ -98,6 +98,7 @@ function get_leaderboard(res) {
       rank: stocks[stock].user.global_rank,
       pp: stocks[stock].user.pp,
       price: stocks[stock].price,
+      id: stocks[stock].user.user.id
     });
   }
   result.sort(function (a, b) {

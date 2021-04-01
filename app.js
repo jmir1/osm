@@ -82,7 +82,7 @@ async function get_stock(stock, res) {
     .collection("inventory")
     .findOne(
       { "user.user.id": parseInt(stock, 10) },
-      { projection: { _id: 0, price: 1, "user.user.username": 1, shares: 1 } }
+      { projection: { _id: 0, price: 1, "user.user.username": 1, "user.user.id": 1, shares: 1 } }
     );
   //console.log(stock, dbres);
   res.send(dbres);
@@ -98,6 +98,7 @@ function get_leaderboard(res) {
       rank: stocks[stock].user.global_rank,
       pp: stocks[stock].user.pp,
       price: stocks[stock].price,
+      id: stocks[stock].user.user.id
     });
   }
   result.sort(function (a, b) {

@@ -327,9 +327,9 @@ app.get("/api/me", function (req, res) {
   if (req.cookies["access_token"]) {
     get_user(req.cookies["access_token"], req.signedCookies["session"], res);
   } else if (req.signedCookies["refresh_token"]) {
-    res.redirect("/refresh_token");
+    res.redirect("/api/refresh_token");
   } else {
-    res.redirect("/login");
+    res.redirect("/api/login");
   }
   //get_users();
 });
@@ -367,9 +367,9 @@ app.get("/api/login", function (req, res) {
   var referer = req.header("Referer") || "https://stocks.jmir.xyz";
 
   if (req.signedCookies["access_token"]) {
-    res.redirect("/me");
+    res.redirect("/api/me");
   } else if (req.signedCookies["refresh_token"]) {
-    res.redirect("/refresh_token");
+    res.redirect("/api/refresh_token");
   } else {
     // your application requests authorization
     res.redirect(
@@ -430,7 +430,7 @@ app.get("/api/callback", function (req, res) {
           console.log(result);
           res.cookie("session", result.id, cookieParams);
           login_user(result);
-          res.redirect("/me");
+          res.redirect("/api/me");
         });
         //console.log(state);
         //if (state) res.redirect(state);
@@ -464,9 +464,9 @@ async function login_user(userres) {
 }
 
 app.get("/api/refresh_token", function (req, res) {
-  var referer = req.get("Referer") || "/me";
+  var referer = req.get("Referer") || "/api/me";
   if (req.cookies["access_token"]) {
-    res.redirect("/me");
+    res.redirect("/api/me");
   } else {
     // requesting access token from refresh token
     var options = {

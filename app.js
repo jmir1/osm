@@ -1,4 +1,4 @@
-process.title = "osu-stocks";
+process.title = "osm";
 require("dotenv").config();
 const querystring = require("querystring");
 const fetch = require("node-fetch");
@@ -112,7 +112,7 @@ function get_leaderboard(res) {
   res.send(string);
 }
 
-var cc_refresh_token = fs.readFileSync(rootdir + "/refresh_token", "utf8");
+var cc_refresh_token = fs.readFileSync(rootdir + "/osm/refresh_token", "utf8");
 var cc_access_token;
 (function first_token() {
   var options = {
@@ -131,7 +131,7 @@ var cc_access_token;
       console.log(body);
       cc_access_token = body.access_token;
       cc_refresh_token = body.refresh_token;
-      fs.writeFileSync(rootdir + "/refresh_token", body.refresh_token);
+      fs.writeFileSync(rootdir + "/osm/refresh_token", body.refresh_token);
       first_leaderboard(1);
       //get_users();
     } else console.log("error authenticating");
@@ -156,7 +156,7 @@ function get_token() {
       console.log(body);
       cc_access_token = body.access_token;
       refresh_token = body.refresh_token;
-      fs.writeFileSync(rootdir + "/refresh_token", body.refresh_token);
+      fs.writeFileSync(rootdir + "/osm/refresh_token", body.refresh_token);
     } else console.log("error authenticating");
   });
   setTimeout(get_token, 8640000);
@@ -314,15 +314,15 @@ async function update_leaderboard(page) {
 //app.use(express.static('.'));
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
-app.use(express.static(rootdir + "/pubdir"));
+app.use(express.static(rootdir + "/osm-web/build"));
 
 
-app.get("/stock", function (req, res) {
+app.get("/api/stock", function (req, res) {
   var stock = req.query.stock;
   get_stock(stock, res);
 });
 
-app.get("/me", function (req, res) {
+app.get("/api/me", function (req, res) {
   if (req.cookies["access_token"]) {
     get_user(req.cookies["access_token"], req.signedCookies["session"], res);
   } else if (req.signedCookies["refresh_token"]) {
@@ -359,10 +359,10 @@ async function get_user(access_token, id, res) {
   res.send(dbres.user);**/
 }
 
-app.get("/rankings", function (req, res) {
+app.get("/api/rankings", function (req, res) {
   get_leaderboard(res);
 });
-app.get("/login", function (req, res) {
+app.get("/api/login", function (req, res) {
   var referer = req.header("Referer") || "https://stocks.jmir.xyz";
 
   if (req.signedCookies["access_token"]) {
@@ -378,13 +378,13 @@ app.get("/login", function (req, res) {
           client_id: client_id,
           state: "state",
           scope: "public identify",
-          redirect_uri: "https://stocks.jmir.xyz/callback",
+          redirect_uri: "https://stocks.jmir.xyz/api/callback",
         })
     );
   }
 });
 
-app.get("/callback", function (req, res) {
+app.get("/api/callback", function (req, res) {
   // your application requests refresh and access tokens
 
   var code = req.query.code || null;
@@ -397,7 +397,7 @@ app.get("/callback", function (req, res) {
         client_secret: client_secret,
         code: code,
         grant_type: "authorization_code",
-        redirect_uri: "https://stocks.jmir.xyz/callback",
+        redirect_uri: "https://stocks.jmir.xyz/api/callback",
       },
       json: true,
     };
@@ -462,7 +462,7 @@ async function login_user(userres) {
       .insertOne({ user: userres, shares: {}, net_worth: 0 });
 }
 
-app.get("/refresh_token", function (req, res) {
+app.get("/api/refresh_token", function (req, res) {
   var referer = req.get("Referer") || "/me";
   if (req.cookies["access_token"]) {
     res.redirect("/me");

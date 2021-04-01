@@ -5,8 +5,8 @@
   "main": "app.js",
   "author": "jmir",
   "license": "GPL-3.0-or-later",
-  "scripts":{
-    "start":"node app.js"
+  "scripts": {
+    "start": "node app.js"
   },
   "repository": {
     "type": "git",
@@ -15,6 +15,7 @@
   "dependencies": {
     "cookie-encrypter": "^1.0.1",
     "cookie-parser": "^1.4.5",
+    "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "fs": "^0.0.1-security",

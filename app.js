@@ -4,6 +4,7 @@ const querystring = require("querystring");
 const fetch = require("node-fetch");
 const cookieParser = require("cookie-parser");
 const cookieEncrypter = require("cookie-encrypter");
+const cors = require('cors');
 const express = require("express");
 const request = require("request");
 const http = require("http");
@@ -33,7 +34,7 @@ var url = f('mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s',
   dbuser, dbpassword, dburl, authMechanism);
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
-
+app.use(cors()); // allows client-side js to query the api
 var dbo;
 
 MongoClient.connect(url, function (err, db) {
@@ -44,37 +45,37 @@ MongoClient.connect(url, function (err, db) {
 var stocks = {};
 var users = {};
 function initialize_objects() {
-    dbo
-      .collection("inventory")
-      .find({})
-      .toArray(function (err, result) {
-        if (err) throw err;
-        for (stock in result)
-          stocks[result[stock].user.user.id.toString()] = result[stock];
-        //console.log(stocks);
-      });
-    dbo
-      .collection("users")
-      .find({})
-      .toArray(function (err, result) {
-        if (err) throw err;
-        for (user in result)
-          users[result[user].user.id.toString()] = result[user];
-      });
+  dbo
+    .collection("inventory")
+    .find({})
+    .toArray(function (err, result) {
+      if (err) throw err;
+      for (stock in result)
+        stocks[result[stock].user.user.id.toString()] = result[stock];
+      //console.log(stocks);
+    });
+  dbo
+    .collection("users")
+    .find({})
+    .toArray(function (err, result) {
+      if (err) throw err;
+      for (user in result)
+        users[result[user].user.id.toString()] = result[user];
+    });
 }
 
 function find_user(user, res) {
   var res;
-    if (err) throw err;
-    var dbo = db.db("osu-stocks");
-    var query = { "user.user.username": user };
-    dbo
-      .collection("inventory")
-      .find(query)
-      .toArray(function (err, result) {
-        if (err) throw err;
-        res.send(result);
-      });
+  if (err) throw err;
+  var dbo = db.db("osu-stocks");
+  var query = { "user.user.username": user };
+  dbo
+    .collection("inventory")
+    .find(query)
+    .toArray(function (err, result) {
+      if (err) throw err;
+      res.send(result);
+    });
 }
 
 async function get_stock(stock, res) {
@@ -373,13 +374,13 @@ app.get("/login", function (req, res) {
     // your application requests authorization
     res.redirect(
       "https://osu.ppy.sh/oauth/authorize?" +
-        querystring.stringify({
-          response_type: "code",
-          client_id: client_id,
-          state: "state",
-          scope: "public identify",
-          redirect_uri: "https://stocks.jmir.xyz/callback",
-        })
+      querystring.stringify({
+        response_type: "code",
+        client_id: client_id,
+        state: "state",
+        scope: "public identify",
+        redirect_uri: "https://stocks.jmir.xyz/callback",
+      })
     );
   }
 });
@@ -406,7 +407,7 @@ app.get("/callback", function (req, res) {
       if (!error && response.statusCode === 200) {
         var access_token = body.access_token,
           refresh_token = body.refresh_token;
-          //expires_in = body.expires_in;
+        //expires_in = body.expires_in;
         var cookieParams = {
           signed: true,
           httpOnly: true,
@@ -436,18 +437,18 @@ app.get("/callback", function (req, res) {
       } else {
         res.redirect(
           "/#" +
-            querystring.stringify({
-              error: "error",
-            })
+          querystring.stringify({
+            error: "error",
+          })
         );
       }
     });
   } else {
     res.redirect(
       "/#" +
-        querystring.stringify({
-          error: "error",
-        })
+      querystring.stringify({
+        error: "error",
+      })
     );
   }
 });

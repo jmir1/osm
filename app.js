@@ -129,7 +129,7 @@ var cc_access_token;
   };
   request.post(options, function (error, response, body) {
     if (!error && response.statusCode === 200) {
-      console.log(body);
+      console.log("obtained new access token");
       cc_access_token = body.access_token;
       cc_refresh_token = body.refresh_token;
       fs.writeFileSync(rootdir + "/osm/refresh_token", body.refresh_token);
@@ -154,13 +154,13 @@ function get_token() {
   };
   request.post(options, function (error, response, body) {
     if (!error && response.statusCode === 200) {
-      console.log(body);
+      console.log("obtained new access token");
       cc_access_token = body.access_token;
       refresh_token = body.refresh_token;
       fs.writeFileSync(rootdir + "/osm/refresh_token", body.refresh_token);
     } else console.log("error authenticating");
   });
-  setTimeout(get_token, 8640000);
+  setTimeout(get_token, 1800000);
 }
 
 async function get_users() {

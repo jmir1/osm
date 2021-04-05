@@ -5,19 +5,15 @@ const fetch = require("node-fetch");
 const cookieParser = require("cookie-parser");
 const cookieEncrypter = require("cookie-encrypter");
 const express = require("express");
+const app = express();
+const bodyparser = require("body-parser");
 const request = require("request");
 const http = require("http");
-const https = require("https");
-const app = express();
 const fs = require("fs");
 const f = require('util').format;
-
-const privateKey = fs.readFileSync(process.env.PRIVKEYPATH, "utf8");
-const certificate = fs.readFileSync(process.env.CERTPATH, "utf8");
+const randomstring = require("randomstring");
 
 const rootdir = process.env.ROOTDIR;
-
-const credentials = { key: privateKey, cert: certificate };
 
 const cookie_secret = process.env.COOKIE_SECRET;
 
@@ -34,65 +30,380 @@ var url = f('mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s',
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
+//we establish the mongodb connection and start
 var dbo;
 
-MongoClient.connect(url, function (err, db) {
+MongoClient.connect(url, {
+  useUnifiedTopology: true
+}, function (err, db) {
   if (err) throw err;
   dbo = db.db("osu-stocks");
+  first_token();
 });
 
+//we request an access token with the client_credentials method
+var cc_access_token;
+
+function first_token() {
+  var options = {
+    url: "https://osu.ppy.sh/oauth/token",
+    body: {
+      client_id: client_id,
+      client_secret: client_secret,
+      grant_type: "client_credentials",
+      scope: "public"
+    },
+    json: true,
+  };
+  request.post(options, function (error, response, body) {
+    if (!error && response.statusCode === 200) {
+      console.log("obtained new access token");
+      cc_access_token = body.access_token;
+      initialize_objects().then(() => {update_leaderboard(1);});
+    } else console.log("error authenticating");
+  });
+  setTimeout(get_token, 1800000);
+}
+
+//function to refresh our token (we do this every 30 minutes)
+function get_token() {
+  var options = {
+    url: "https://osu.ppy.sh/oauth/token",
+    body: {
+      client_id: client_id,
+      client_secret: client_secret,
+      grant_type: "client_credentials",
+      scope: "public"
+    },
+    json: true,
+  };
+  request.post(options, function (error, response, body) {
+    if (!error && response.statusCode === 200) {
+      try {
+        console.log("obtained new access token");
+        cc_access_token = body.access_token;
+      } catch (error) {
+        console.error(body);
+      }
+    } else console.error("error authenticating");
+  });
+  setTimeout(get_token, 1800000);
+}
+
+//we check for new players in the leaderboards and add them to the database
+async function first_leaderboard(page) {
+  if (page) {
+    console.log("page", page);
+    var options = {
+      url: "https://osu.ppy.sh/api/v2/rankings/osu/performance?cursor[page]=" +
+        page,
+      headers: {
+        Authorization: "Bearer " + cc_access_token
+      },
+    };
+    try {
+      const response = await fetch(options.url, {
+        method: "GET",
+        headers: options.headers,
+      });
+      json = await response.json();
+      var myobj = json.ranking;
+      for (var i = 0; i < myobj.length; i++) {
+        var players = await dbo
+          .collection("inventory")
+          .findOne({
+            "user.user.id": myobj[i].user.id
+          });
+        if (!players && myobj[i]) {
+          console.log("new user added: ", myobj[i].user.id, "price:", myobj[i].pp / 100);
+          await dbo.collection("inventory").insertOne({
+            user: myobj[i],
+            shares: {
+              total: 100000,
+              bought: 0
+            },
+            price: myobj[i].pp / 100,
+            "pp-30": [{
+                date: Date.now() - 1,
+                pp: myobj[i].pp,
+                price: myobj[i].pp / 100
+              },
+              {
+                date: Date.now(),
+                pp: myobj[i].pp,
+                price: myobj[i].pp / 100
+              }
+            ]
+          });
+        }
+      }
+
+      if (json.cursor && page < 20) setTimeout(first_leaderboard, 1000, json.cursor.page);
+      else {
+        console.log("made leaderboard.");
+        await initialize_objects();
+        setTimeout(update_leaderboard, 50, 1);
+        setTimeout(update_users, 50);
+      }
+    } catch (error) {
+      console.log("error" + error);
+    }
+  }
+}
+
+//function to get everything from the db into our memory ("stocks" and "users" objects)
 var stocks = {};
 var users = {};
-function initialize_objects() {
-    dbo
-      .collection("inventory")
-      .find({})
-      .toArray(function (err, result) {
-        if (err) throw err;
-        for (stock in result)
-          stocks[result[stock].user.user.id.toString()] = result[stock];
-        //console.log(stocks);
-      });
-    dbo
-      .collection("users")
-      .find({})
-      .toArray(function (err, result) {
-        if (err) throw err;
-        for (user in result)
-          users[result[user].user.id.toString()] = result[user];
-      });
-}
 
-function find_user(user, res) {
-  var res;
-    if (err) throw err;
-    var dbo = db.db("osu-stocks");
-    var query = { "user.user.username": user };
-    dbo
-      .collection("inventory")
-      .find(query)
-      .toArray(function (err, result) {
-        if (err) throw err;
-        res.send(result);
-      });
-}
-
-async function get_stock(stock, res) {
-  var dbres = await dbo
+async function initialize_objects() {
+  stocksresult = await dbo
     .collection("inventory")
-    .findOne(
-      { "user.user.id": parseInt(stock, 10) },
-      { projection: { _id: 0, price: 1, "user.user.username": 1, "user.user.id": 1, shares: 1 } }
-    );
-  //console.log(stock, dbres);
-  res.send(dbres);
+    .find({})
+    .toArray();
+  for (stock in stocksresult)
+    stocks[stocksresult[stock].user.user.id.toString()] = stocksresult[stock];
+
+  var usersresult = await dbo
+    .collection("users")
+    .find({})
+    .toArray();
+  for (user in usersresult)
+    users[usersresult[user].user.id.toString()] = usersresult[user];
+  console.log("initaialized objects.")
 }
 
-function get_leaderboard(res) {
+//function to continuously update stats
+async function update_leaderboard(page) {
+  if (page) {
+    console.log("page", page);
+    var options = {
+      url: "https://osu.ppy.sh/api/v2/rankings/osu/performance?cursor[page]=" +
+        page,
+      headers: {
+        Authorization: "Bearer " + cc_access_token
+      },
+    };
+    try {
+      const response = await fetch(options.url, {
+        method: "GET",
+        headers: options.headers,
+      });
+      json = await response.json();
+      var myobj = json.ranking;
+      update_stocks(myobj, page).then(() => {
+        //this number (page < x) specifies the cutoff point for when player stats aren't updated any more: e.g. page < 30 means that if a player is not in top 1500, their stats won't update
+        if (json.cursor && page < 30) setTimeout(update_leaderboard, 500, json.cursor.page);
+        else {
+          console.log("updated leaderboard.");
+          setTimeout(update_leaderboard, 2000, 1);
+        }
+      });
+    } catch (error) {
+      console.log("error" + error);
+    }
+  }
+}
+
+//function to update the values for stocks by getting new pp values and calculating a new price
+//it receives an array (called ranking) with osu-api-like user objects
+async function update_stocks(ranking, page) {
+  var bulkwrite = [];
+  //we check if the player stats are supposed to be updated
+  for (stock in ranking) {
+    var id_str = ranking[stock].user.id.toString();    
+    if (stocks[id_str]) {
+      //update the user part of the stock object
+      stocks[id_str].user = ranking[stock];
+      //we delete an entry in the pp history if it is more than 90 days old (7776000000ms)
+      var counter = 0;
+      for (j in stocks[id_str]["pp-30"]) {
+        if (Date.now() - stocks[id_str]["pp-30"][j].date > 7776000000) {
+          counter++;
+        } else {
+          break;
+        }
+      }
+      for (j = 0; j < counter; j++) {
+        stocks[id_str]["pp-30"].shift();
+      }
+      //update pp history
+      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1] = {
+        date: Date.now(),
+        pp: ranking[stock].pp,
+        price: price
+      };
+      //calculate the supply/demand multiplier
+      var market_multiplier =
+        1 / (1 - stocks[id_str].shares.bought / stocks[id_str].shares.total);
+      //calculate the pp growth multiplier
+      var pp30_thing = 0;
+      var pp30_sum = 0;
+      for (
+        var pp30_idx = 1; pp30_idx < stocks[id_str]["pp-30"].length; pp30_idx++
+      ) {
+        pp30_sum += pp30_idx;
+      }
+      for (
+        var pp30_idx = 0; pp30_idx < stocks[id_str]["pp-30"].length - 1; pp30_idx++
+      ) {
+        pp30_thing +=
+          (stocks[id_str]["pp-30"][pp30_idx + 1].pp -
+            stocks[id_str]["pp-30"][pp30_idx].pp) *
+          (pp30_idx + 1);
+      }
+      pp30_thing *= 1 / pp30_sum;
+      //final price calculation:
+      var price =
+        ((ranking[stock].pp * (1 + (50 * pp30_thing) / ranking[stock].pp)) /
+          100) *
+        market_multiplier;
+      //add new entry in the pp history if it is older than 12 hours (43200000ms)
+      var last_daypp_30 =
+        stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 2];
+      if (last_daypp_30.date < Date.now() - 43200000) {
+        stocks[id_str]["pp-30"].push({
+          date: Date.now(),
+          pp: ranking[stock].pp,
+          price: price
+        });
+      }
+      //update the price in the stock object
+      stocks[id_str].price = price;
+      //add replace operation to the bulkwrite (more performance!)
+      bulkwrite.push({
+        replaceOne: {
+          filter: {
+            _id: stocks[id_str]._id
+          },
+          replacement: stocks[id_str]
+        }
+      });
+    } else if (!stocks[id_str] && page <= 20) {
+      console.log("added user " + id_str);
+      //add new user to db
+      stocks[id_str] = {
+        user: ranking[stock],
+        shares: {
+          total: 100000,
+          bought: 0
+        },
+        price: ranking[stock].pp / 100,
+        "pp-30": [{
+            date: Date.now() - 1,
+            pp: ranking[stock].pp,
+            price: ranking[stock].pp / 100
+          },
+          {
+            date: Date.now(),
+            pp: ranking[stock].pp,
+            price: ranking[stock].pp / 100
+          }
+        ]
+      };
+      bulkwrite.push({
+        insertOne: {
+          document: stocks[id_str]
+        }
+      });
+    }
+  }
+  //we write the entire page into the db at once for performance reasons
+  if (bulkwrite.length > 0) await dbo
+    .collection("inventory")
+    .bulkWrite(bulkwrite);
+}
+
+//function to continuously update users
+async function update_users() {
+  for (id in users) {
+    var bulkwrite = [];
+    //update userpage
+    var options = {
+      url: "https://osu.ppy.sh/api/v2/users/" + users[id].user.id,
+      headers: {
+        Authorization: "Bearer " + cc_access_token
+      },
+    };
+    try {
+      const response = await fetch(options.url, {
+        method: "GET",
+        headers: options.headers,
+      });
+      json = await response.json();
+      users[id].user = json;
+    } catch (error) {
+      console.log("error" + error);
+    }
+    //update financials
+    let share_worth = 0;
+    for (stock_id in users[id].shares) {
+      share_worth += users[id].shares[stock_id] * stocks[stock_id].price;
+    }
+    users[id].share_worth = share_worth;
+    //write to db
+    bulkwrite.push({
+      replaceOne: {
+        filter: {
+          _id: users[id]._id
+        },
+        replacement: users[id]
+      }
+    });
+  }
+  await dbo
+    .collection("users")
+    .bulkWrite(bulkwrite);
+  console.log("updated users");
+  setTimeout(update_users, 60000, 1);
+}
+
+///////////
+
+//cookie-parser for encrypted cookies
+app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
+
+//bodyparser for post routes
+app.use(bodyparser.urlencoded({
+  extended: true
+}));
+
+//static webserver for frontend
+app.use(express.static(rootdir + "/osm-web/build"));
+
+//route to get info about a stock
+app.get("/api/stock", function (req, res) {
+  var stock = req.query.stock;
+  res.send(get_stock(stock));
+});
+//function returns info about a stock
+function get_stock(stock) {
+  return {
+    price: stocks[stock.toString()].price,
+    username: stocks[stock.toString()].user.user.username,
+    id: stocks[stock.toString()].user.user.id,
+    shares: stocks[stock.toString()].shares
+  }
+}
+
+//route to get info about yourself
+app.get("/api/me", function (req, res) {
+  if (req.signedCookies["user_id"] && req.signedCookies["session"]) {
+    res.send(users[req.signedCookies["user_id"].toString()]);
+  } else {
+    res.redirect("/");
+  }
+});
+
+//route to get the stocks sorted by their value
+app.get("/api/rankings", function (req, res) {
+  res.type("application/json");
+  res.send(get_leaderboard());
+});
+//this function formats and returns the stocks sorted by their value
+function get_leaderboard() {
   var string = "[";
   var result = [];
   for (stock in stocks) {
-    //console.log(stock);
     result.push({
       username: stocks[stock].user.user.username,
       rank: stocks[stock].user.global_rank,
@@ -109,288 +420,52 @@ function get_leaderboard(res) {
       string += JSON.stringify(result[player]) + "]";
     else string += JSON.stringify(result[player]) + ",\n";
   }
-  res.type("application/json");
-  res.send(string);
+  return string;
 }
-
-var cc_refresh_token = fs.readFileSync(rootdir + "/osm/refresh_token", "utf8");
-var cc_access_token;
-(function first_token() {
-  var options = {
-    url: "https://osu.ppy.sh/oauth/token",
-    body: {
-      client_id: client_id,
-      client_secret: client_secret,
-      grant_type: "refresh_token",
-      scope: "public",
-      refresh_token: cc_refresh_token,
-    },
-    json: true,
-  };
-  request.post(options, function (error, response, body) {
-    if (!error && response.statusCode === 200) {
-      console.log("obtained new access token");
-      cc_access_token = body.access_token;
-      cc_refresh_token = body.refresh_token;
-      fs.writeFileSync(rootdir + "/osm/refresh_token", body.refresh_token);
-      first_leaderboard(1);
-      //get_users();
-    } else console.log("error authenticating");
-  });
-  setTimeout(get_token, 1800000);
-})();
-
-function get_token() {
-  var options = {
-    url: "https://osu.ppy.sh/oauth/token",
-    body: {
-      client_id: client_id,
-      client_secret: client_secret,
-      grant_type: "refresh_token",
-      scope: "public",
-      refresh_token: cc_refresh_token,
-    },
-    json: true,
-  };
-  request.post(options, function (error, response, body) {
-    if (!error && response.statusCode === 200) {
-      console.log("obtained new access token");
-      cc_access_token = body.access_token;
-      refresh_token = body.refresh_token;
-      fs.writeFileSync(rootdir + "/osm/refresh_token", body.refresh_token);
-    } else console.log("error authenticating");
-  });
-  setTimeout(get_token, 1800000);
-}
-
-async function get_users() {
-  for (const [key, value] of Object.entries(users)) {
-    var options = {
-      url: `https://osu.ppy.sh/api/v2/users/${key}/osu`,
-      headers: { Authorization: "Bearer " + cc_access_token },
-    };
-    try {
-      const response = await fetch(options.url, {
-        method: "GET",
-        headers: options.headers,
-      });
-      json = await response.json();
-      users[key].user = json;
-    } catch (error) {
-      console.log("error" + error);
-    }
+/*not ready
+//route for buying stock
+app.post("/api/buy", function (req, res) {
+  var stock_id = req.body.stock_id;
+  var quantity = req.body.quantity;
+  var user_id = req.body.user_id;
+  var sessioncookie = req.body.session_cookie;
+  console.log(req.body)
+  if (true) {
+    let result = buy_stock(stock_id, quantity, user_id, sessioncookie);
+    res.send(result)
   }
-}
-
-async function first_leaderboard(page) {
-  if (page) {
-    //console.log("page", page);
-    var options = {
-      url:
-        "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
-        page,
-      headers: { Authorization: "Bearer " + cc_access_token },
-    };
-    try {
-      const response = await fetch(options.url, {
-        method: "GET",
-        headers: options.headers,
-      });
-      json = await response.json();
-      var myobj = json.ranking;
-      //update_stocks(myobj);
-      for (var i = 0; i < myobj.length; i++) {
-        var players = await dbo
-          .collection("inventory")
-          .findOne({ "user.user.id": myobj[i].user.id });
-        if (!players && myobj[i]) {
-          console.log("new user added: ", myobj[i].user.id);
-          await dbo.collection("inventory").insertOne({
-            user: myobj[i],
-            shares: { total: 100000, bought: 0 },
-            price: myobj[i].pp / 100,
-            "pp-30": [{ date: Date.now(), pp: myobj[i].pp }],
-          });
-        }
-      }
-      if (json.cursor) setTimeout(first_leaderboard, 1000, json.cursor.page);
-      else {
-        console.log("made leaderboard.");
-        initialize_objects();
-        setTimeout(update_leaderboard, 1000, 1);
-      }
-    } catch (error) {
-      console.log("error" + error);
-    }
-  }
-}
-
-async function update_stocks(ranking) {
-  for (stock in ranking) {
-    var id_str = ranking[stock].user.id.toString();
-    stocks[id_str].user = ranking[stock];
-    var counter = 0;
-    for (j in stocks[id_str]["pp-30"]) {
-      if (Date.now() - stocks[id_str]["pp-30"][j].date > 7776000000) {
-        counter++;
-      } else {
-        break;
-      }
-    }
-    for (j = 0; j < counter; j++) {
-      stocks[id_str]["pp-30"].shift();
-    }
-
-    var market_multiplier =
-      1 / (1 - stocks[id_str].shares.bought / stocks[id_str].shares.total);
-    var pp30_thing = 0;
-    var pp30_sum = 0;
-    for (
-      var pp30_idx = 1;
-      pp30_idx < stocks[id_str]["pp-30"].length;
-      pp30_idx++
-    ) {
-      pp30_sum += pp30_idx;
-    }
-    for (
-      var pp30_idx = 0;
-      pp30_idx < stocks[id_str]["pp-30"].length - 1;
-      pp30_idx++
-    ) {
-      pp30_thing +=
-        (stocks[id_str]["pp-30"][pp30_idx + 1].pp -
-          stocks[id_str]["pp-30"][pp30_idx].pp) *
-        (pp30_idx + 1);
-    }
-
-    pp30_thing *= 1 / pp30_sum;
-    var price =
-      ((ranking[stock].pp * (1 + (50 * pp30_thing) / ranking[stock].pp)) /
-        100) *
-      market_multiplier;
-    stocks[id_str].price = price;
-    var last_daypp_30 =
-      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1];
-    if (last_daypp_30.date < Date.now() - 86400000) {
-      stocks[id_str]["pp-30"].push({
-        date: Date.now(),
-        pp: ranking[stock].pp,
-      });
-    }
-    await dbo
-      .collection("inventory")
-      .replaceOne({ _id: stocks[id_str]._id }, stocks[id_str]);
-  }
-}
-
-async function update_leaderboard(page) {
-  if (page) {
-    //console.log("page", page);
-    var options = {
-      url:
-        "https://osu.ppy.sh/api/v2/rankings/osu/performance?filter=friends&cursor[page]=" +
-        page,
-      headers: { Authorization: "Bearer " + cc_access_token },
-    };
-    try {
-      const response = await fetch(options.url, {
-        method: "GET",
-        headers: options.headers,
-      });
-      json = await response.json();
-      var myobj = json.ranking;
-      update_stocks(myobj).then(() => {
-        if (json.cursor) setTimeout(update_leaderboard, 500, json.cursor.page);
-        else {
-          console.log("updated leaderboard.");
-          setTimeout(update_leaderboard, 500, 1);
-        }
-      });
-    } catch (error) {
-      console.log("error" + error);
-    }
-  }
-}
-
-//app.use(express.static('.'));
-app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
-
-app.use(express.static(rootdir + "/osm-web/build"));
-
-
-app.get("/api/stock", function (req, res) {
-  var stock = req.query.stock;
-  get_stock(stock, res);
 });
 
-app.get("/api/me", function (req, res) {
-  if (req.cookies["access_token"]) {
-    get_user(req.cookies["access_token"], req.signedCookies["session"], res);
-  } else if (req.signedCookies["refresh_token"]) {
-    res.redirect("/api/refresh_token");
-  } else {
-    res.redirect("/api/login");
+function buy_stock(stock_id, quantity, user_id, token) {
+  for (cookie in users[user_id].sessioncookies) {
+    if (users[user_id].sessioncookies[cookie].token === token) {
+      update_users();
+      return {msg: "success!"};
+    }
   }
-  //get_users();
-});
+}*/
 
-async function get_user(access_token, id, res) {
-  var options = {
-    url: "https://osu.ppy.sh/api/v2/me/osu",
-    headers: { Authorization: "Bearer " + access_token },
-  };
-  try {
-    const response = await fetch(options.url, {
-      method: "GET",
-      headers: options.headers,
-    });
-    json = await response.json();
-    //res.send(users[id.toString()]);
-    res.send(json);
-  } catch (error) {
-    console.log("error" + error);
-    res.send("error" + error);
-  } /**
-  console.log(id);
-  var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
-  var dbres = await dbo
-    .collection("users")
-    .findOne({ "user.id": parseInt(id) });
-  res.send(dbres.user);**/
-}
-
-app.get("/api/rankings", function (req, res) {
-  get_leaderboard(res);
-});
+//route for logging in (redirects to osu oauth confirmation page)
 app.get("/api/login", function (req, res) {
-  var referer = req.header("Referer") || "https://stocks.jmir.xyz";
-
-  if (req.signedCookies["access_token"]) {
-    res.redirect("/api/me");
-  } else if (req.signedCookies["refresh_token"]) {
-    res.redirect("/api/refresh_token");
-  } else {
-    // your application requests authorization
-    res.redirect(
-      "https://osu.ppy.sh/oauth/authorize?" +
-        querystring.stringify({
-          response_type: "code",
-          client_id: client_id,
-          state: "state",
-          scope: "public identify",
-          redirect_uri: "https://stocks.jmir.xyz/api/callback",
-        })
-    );
-  }
+  var referer = req.header("Referer") || null;
+  // your application requests authorization
+  res.redirect(
+    "https://osu.ppy.sh/oauth/authorize?" +
+    querystring.stringify({
+      response_type: "code",
+      client_id: client_id,
+      state: referer,
+      scope: "public identify",
+      redirect_uri: process.env.REDIRECT_URI,
+    })
+  );
 });
 
+//route used to ultimately log you in
 app.get("/api/callback", function (req, res) {
-  // your application requests refresh and access tokens
-
+  var state = req.query.state || null;
   var code = req.query.code || null;
   if (code) {
-    //console.log(state, code);
     var authOptions = {
       url: "https://osu.ppy.sh/oauth/token",
       body: {
@@ -398,71 +473,81 @@ app.get("/api/callback", function (req, res) {
         client_secret: client_secret,
         code: code,
         grant_type: "authorization_code",
-        redirect_uri: "https://stocks.jmir.xyz/api/callback",
+        redirect_uri: process.env.REDIRECT_URI,
       },
       json: true,
     };
-
     request.post(authOptions, function (error, response, body) {
       if (!error && response.statusCode === 200) {
-        var access_token = body.access_token,
-          refresh_token = body.refresh_token;
-          //expires_in = body.expires_in;
+        var access_token = body.access_token;
+        expires_in = body.expires_in;
         var cookieParams = {
           signed: true,
           httpOnly: true,
-          maxAge: 86400000,
+          maxAge: expires_in * 1000,
         };
-        var accessCookieParams = {
-          plain: true,
-          httpOnly: true,
-          maxAge: 86400000,
-        };
-        res.cookie("access_token", access_token, accessCookieParams);
-        res.cookie("refresh_token", refresh_token, cookieParams);
-        console.log(refresh_token);
         var options = {
           url: "https://osu.ppy.sh/api/v2/me/osu",
-          headers: { Authorization: "Bearer " + access_token },
+          headers: {
+            Authorization: "Bearer " + access_token
+          },
         };
         request.get(options, function (error, response, body) {
           var result = JSON.parse(body);
           console.log(result);
-          res.cookie("session", result.id, cookieParams);
-          login_user(result);
-          res.redirect("/api/me");
+          let token = result.id + randomstring.generate(64);
+          res.cookie("session", token, cookieParams);
+          res.cookie("user_id", result.id, cookieParams);
+          console.log(result.id + token);
+          login_user(result, result.id + token, expires_in);
+          if (state) res.redirect(state);
+          else res.redirect("/api/me");
         });
-        //console.log(state);
-        //if (state) res.redirect(state);
       } else {
         res.redirect(
           "/#" +
-            querystring.stringify({
-              error: "error",
-            })
+          querystring.stringify({
+            error: "error",
+          })
         );
       }
     });
   } else {
     res.redirect(
       "/#" +
-        querystring.stringify({
-          error: "error",
-        })
+      querystring.stringify({
+        error: "error",
+      })
     );
   }
 });
 
-async function login_user(userres) {
-  var db = await MongoClient.connect(url);
-  var dbo = await db.db("osu-stocks");
-  var dbres = await dbo.collection("users").findOne({ "user.id": userres.id });
-  if (json.id && !dbres)
-    await dbo
-      .collection("users")
-      .insertOne({ user: userres, shares: {}, net_worth: 0 });
+//function for logging the user in
+async function login_user(userres, sessioncookie, expires_in) {
+  if (users[userres.id.toString()]) {
+    users[userres.id.toString()].sessioncookies.push({
+      date: Date.now() + expires_in * 1000,
+      token: sessioncookie
+    });
+  } else {
+    users[userres.id.toString()] = {
+      user: userres,
+      shares: {},
+      share_worth: 0,
+      balance: 100000,
+      sessioncookies: [{
+        date: Date.now() + expires_in * 1000,
+        token: sessioncookie
+      }]
+    };
+  }
 }
 
+//start the server
+const httpServer = http.createServer(app);
+httpServer.listen(process.env.PORT);
+
+/*don't need all this right now
 app.get("/api/refresh_token", function (req, res) {
   var referer = req.get("Referer") || "/api/me";
   if (req.cookies["access_token"]) {
@@ -502,9 +587,42 @@ app.get("/api/refresh_token", function (req, res) {
       } else res.send("error authenticating");
     });
   }
-});
-
-const httpServer = http.createServer(app);
-const httpsServer = https.createServer(credentials, app);
-httpsServer.listen(8444);
-httpServer.listen(8480);
+});*/
+/*
+async function get_users() {
+  for (const [key, value] of Object.entries(users)) {
+    var options = {
+      url: `https://osu.ppy.sh/api/v2/users/${key}/osu`,
+      headers: {
+        Authorization: "Bearer " + cc_access_token
+      },
+    };
+    try {
+      const response = await fetch(options.url, {
+        method: "GET",
+        headers: options.headers,
+      });
+      json = await response.json();
+      users[key].user = json;
+    } catch (error) {
+      console.log("error" + error);
+    }
+  }
+}
+*/
+/*
+function find_user(user, res) {
+  var res;
+  if (err) throw err;
+  var dbo = db.db("osu-stocks");
+  var query = {
+    "user.user.username": user
+  };
+  dbo
+    .collection("inventory")
+    .find(query)
+    .toArray(function (err, result) {
+      if (err) throw err;
+      res.send(result);
+    });
+}*/

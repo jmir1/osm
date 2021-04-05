@@ -540,6 +540,7 @@ async function login_user(userres, sessioncookie, expires_in) {
         token: sessioncookie
       }]
     };
+    await dbo.collection("users").insertOne(users[userres.id.toString()]);
   }
 }
 

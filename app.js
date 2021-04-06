@@ -90,67 +90,6 @@ function get_token() {
   setTimeout(get_token, 1800000);
 }
 
-//we check for new players in the leaderboards and add them to the database
-async function first_leaderboard(page) {
-  if (page) {
-    console.log("page", page);
-    var options = {
-      url: "https://osu.ppy.sh/api/v2/rankings/osu/performance?cursor[page]=" +
-        page,
-      headers: {
-        Authorization: "Bearer " + cc_access_token
-      },
-    };
-    try {
-      const response = await fetch(options.url, {
-        method: "GET",
-        headers: options.headers,
-      });
-      json = await response.json();
-      var myobj = json.ranking;
-      for (var i = 0; i < myobj.length; i++) {
-        var players = await dbo
-          .collection("inventory")
-          .findOne({
-            "user.user.id": myobj[i].user.id
-          });
-        if (!players && myobj[i]) {
-          console.log("new user added: ", myobj[i].user.id, "price:", myobj[i].pp / 100);
-          await dbo.collection("inventory").insertOne({
-            user: myobj[i],
-            shares: {
-              total: 100000,
-              bought: 0
-            },
-            price: myobj[i].pp / 100,
-            "pp-30": [{
-                date: Date.now() - 1,
-                pp: myobj[i].pp,
-                price: myobj[i].pp / 100
-              },
-              {
-                date: Date.now(),
-                pp: myobj[i].pp,
-                price: myobj[i].pp / 100
-              }
-            ]
-          });
-        }
-      }
-
-      if (json.cursor && page < 20) setTimeout(first_leaderboard, 1000, json.cursor.page);
-      else {
-        console.log("made leaderboard.");
-        await initialize_objects();
-        setTimeout(update_leaderboard, 50, 1);
-        setTimeout(update_users, 50);
-      }
-    } catch (error) {
-      console.log("error" + error);
-    }
-  }
-}
-
 //function to get everything from the db into our memory ("stocks" and "users" objects)
 var stocks = {};
 var users = {};
@@ -278,7 +217,7 @@ async function update_stocks(ranking, page) {
           replacement: stocks[id_str]
         }
       });
-    } else if (!stocks[id_str] && page <= 20) {
+    } else if (!stocks[id_str] && page <= 20) { //this number specifies at what rank new players are added. (20 = top 1000)
       console.log("added user " + id_str);
       //add new user to db
       stocks[id_str] = {

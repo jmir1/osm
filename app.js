@@ -59,7 +59,10 @@ function first_token() {
     if (!error && response.statusCode === 200) {
       console.log("obtained new access token");
       cc_access_token = body.access_token;
-      initialize_objects().then(() => {update_leaderboard(1);});
+      initialize_objects().then(() => {
+        update_leaderboard(1);
+        update_users();
+      });
     } else console.log("error authenticating");
   });
   setTimeout(get_token, 1800000);
@@ -108,13 +111,12 @@ async function initialize_objects() {
     .toArray();
   for (user in usersresult)
     users[usersresult[user].user.id.toString()] = usersresult[user];
-  console.log("initaialized objects.")
+  console.log("initialized objects.")
 }
 
 //function to continuously update stats
 async function update_leaderboard(page) {
   if (page) {
-    console.log("page", page);
     var options = {
       url: "https://osu.ppy.sh/api/v2/rankings/osu/performance?cursor[page]=" +
         page,
@@ -149,7 +151,7 @@ async function update_stocks(ranking, page) {
   var bulkwrite = [];
   //we check if the player stats are supposed to be updated
   for (stock in ranking) {
-    var id_str = ranking[stock].user.id.toString();    
+    var id_str = ranking[stock].user.id.toString();
     if (stocks[id_str]) {
       //update the user part of the stock object
       stocks[id_str].user = ranking[stock];
@@ -254,8 +256,8 @@ async function update_stocks(ranking, page) {
 
 //function to continuously update users
 async function update_users() {
+  var bulkwrite = [];
   for (id in users) {
-    var bulkwrite = [];
     //update userpage
     var options = {
       url: "https://osu.ppy.sh/api/v2/users/" + users[id].user.id,
@@ -279,6 +281,13 @@ async function update_users() {
       share_worth += users[id].shares[stock_id] * stocks[stock_id].price;
     }
     users[id].share_worth = share_worth;
+    //update login tokens
+    for (cookie in users[id].sessioncookies) {
+      if (users[id].sessioncookies[cookie].date < Date.now() - 86400000) {
+        users[id].sessioncookies.splice(cookie, 1);
+        console.log("deleted cookie");
+      }
+    }
     //write to db
     bulkwrite.push({
       replaceOne: {
@@ -289,16 +298,16 @@ async function update_users() {
       }
     });
   }
-  await dbo
+  if (bulkwrite.length > 0) await dbo
     .collection("users")
     .bulkWrite(bulkwrite);
   console.log("updated users");
-  setTimeout(update_users, 60000, 1);
+  setTimeout(update_users, 10000, 1);
 }
 
 ///////////
 
-//cookie-parser for encrypted cookies
+//cookie-parser for cookies
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
 //bodyparser for post routes
@@ -326,8 +335,8 @@ function get_stock(stock) {
 
 //route to get info about yourself
 app.get("/api/me", function (req, res) {
-  if (req.signedCookies["user_id"] && req.signedCookies["session"]) {
-    res.send(users[req.signedCookies["user_id"].toString()]);
+  if (req.cookies["user_id"] && req.cookies["session"]) {
+    res.send(users[req.cookies["user_id"].toString()]);
   } else {
     res.redirect("/");
   }
@@ -361,28 +370,32 @@ function get_leaderboard() {
   }
   return string;
 }
-/*not ready
+///*not ready
 //route for buying stock
 app.post("/api/buy", function (req, res) {
   var stock_id = req.body.stock_id;
   var quantity = req.body.quantity;
   var user_id = req.body.user_id;
   var sessioncookie = req.body.session_cookie;
-  console.log(req.body)
-  if (true) {
+  if (stock_id && quantity && user_id && sessioncookie) {
     let result = buy_stock(stock_id, quantity, user_id, sessioncookie);
     res.send(result)
   }
 });
-
+//function to buy stocks (just a placeholder)
 function buy_stock(stock_id, quantity, user_id, token) {
   for (cookie in users[user_id].sessioncookies) {
-    if (users[user_id].sessioncookies[cookie].token === token) {
-      update_users();
-      return {msg: "success!"};
+    if (users[user_id].sessioncookies[cookie].token == token) {
+      return {
+        balance: users[user_id].balance,
+        shares: users[user_id].shares,
+        stock: stock_id,
+        quantity: quantity,
+        msg: "success!"
+      };
     }
   }
-}*/
+} //*/
 
 //route for logging in (redirects to osu oauth confirmation page)
 app.get("/api/login", function (req, res) {
@@ -421,7 +434,7 @@ app.get("/api/callback", function (req, res) {
         var access_token = body.access_token;
         expires_in = body.expires_in;
         var cookieParams = {
-          signed: true,
+          plain: true,
           httpOnly: true,
           maxAge: expires_in * 1000,
         };
@@ -438,7 +451,7 @@ app.get("/api/callback", function (req, res) {
           res.cookie("session", token, cookieParams);
           res.cookie("user_id", result.id, cookieParams);
           console.log(result.id + token);
-          login_user(result, result.id + token, expires_in);
+          login_user(result, token, expires_in);
           if (state) res.redirect(state);
           else res.redirect("/api/me");
         });
@@ -501,7 +514,7 @@ app.get("/api/refresh_token", function (req, res) {
         client_secret: client_secret,
         grant_type: "refresh_token",
         scope: "public",
-        refresh_token: req.signedCookies["refresh_token"],
+        refresh_token: req.cookies["refresh_token"],
       },
       json: true,
     };
@@ -512,7 +525,7 @@ app.get("/api/refresh_token", function (req, res) {
         refresh_token = body.refresh_token;
         var expires_in = body.expires_in;
         var cookieParams = {
-          signed: true,
+          plain: true,
           httpOnly: true,
           maxAge: 86400000,
         };

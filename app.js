@@ -230,15 +230,15 @@ async function update_stocks(ranking, page) {
         },
         price: ranking[stock].pp / 100,
         "pp-30": [{
-            date: Date.now() - 1,
-            pp: ranking[stock].pp,
-            price: ranking[stock].pp / 100
-          },
-          {
-            date: Date.now(),
-            pp: ranking[stock].pp,
-            price: ranking[stock].pp / 100
-          }
+          date: Date.now() - 1,
+          pp: ranking[stock].pp,
+          price: ranking[stock].pp / 100
+        },
+        {
+          date: Date.now(),
+          pp: ranking[stock].pp,
+          price: ranking[stock].pp / 100
+        }
         ]
       };
       bulkwrite.push({
@@ -344,12 +344,15 @@ app.get("/api/me", function (req, res) {
 
 //route to get the stocks sorted by their value
 app.get("/api/rankings", function (req, res) {
+
+  // Limit example: /api/rankings?limit=100
+  const filters = { limit: parseInt(req.query.limit, 10) || null };
   res.type("application/json");
-  res.send(get_leaderboard());
+  res.send(get_leaderboard(filters));
 });
 //this function formats and returns the stocks sorted by their value
-function get_leaderboard() {
-  var string = "[";
+function get_leaderboard({ limit }) {
+  // var string = "[";
   var result = [];
   for (stock in stocks) {
     result.push({
@@ -363,12 +366,16 @@ function get_leaderboard() {
   result.sort(function (a, b) {
     return b.price - a.price;
   });
-  for (player in result) {
-    if (player == result.length - 1)
-      string += JSON.stringify(result[player]) + "]";
-    else string += JSON.stringify(result[player]) + ",\n";
+  if (limit) {
+    result = result.slice(0, limit);
   }
-  return string;
+  // Shouldn't be necessary
+  // for (player in result) {
+  //   if (player == result.length - 1)
+  //     string += JSON.stringify(result[player]) + "]";
+  //   else string += JSON.stringify(result[player]) + ",\n";
+  // }
+  return JSON.stringify(result);
 }
 ///*not ready
 //route for buying stock

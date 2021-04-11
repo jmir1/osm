@@ -344,14 +344,18 @@ app.get("/api/me", function (req, res) {
 
 //route to get the stocks sorted by their value
 app.get("/api/rankings", function (req, res) {
-
+  const filters = {};
   // Limit example: /api/rankings?limit=100
-  const filters = { limit: parseInt(req.query.limit, 10) || null };
+  if (req.query.limit) {
+    filters.limit = parseInt(req.query.limit);
+  }
+
   res.type("application/json");
   res.send(get_leaderboard(filters));
 });
 //this function formats and returns the stocks sorted by their value
-function get_leaderboard({ limit }) {
+function get_leaderboard(filters) {
+  const { limit } = filters;
   // var string = "[";
   var result = [];
   for (stock in stocks) {

@@ -1,36 +1,37 @@
 {
-	"name": "osm",
-	"version": "1.0.0",
-	"description": "",
-	"main": "app.js",
-	"author": "jmir",
-	"license": "GPL-3.0-or-later",
-	"scripts": {
-		"start": "node app.js",
-		"test": "mocha --timeout 10000"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git://github.com/jmir1/osm.git"
-	},
-	"dependencies": {
-		"body-parser": "^1.19.0",
-		"cookie-encrypter": "^1.0.1",
-		"cookie-parser": "^1.4.5",
-		"dotenv": "^8.2.0",
-		"express": "^4.17.1",
-		"fs": "^0.0.1-security",
-		"http": "^0.0.1-security",
-		"https": "^1.0.0",
-		"mongodb": "^3.6.3",
-		"node-fetch": "^2.6.1",
-		"querystring": "^0.2.0",
-		"randomstring": "^1.1.5",
-		"request": "^2.88.2"
-	},
-	"devDependencies": {
-		"chai": "^4.3.4",
-		"chai-http": "^4.3.0",
-		"mocha": "^8.3.2"
-	}
+    "name": "osm",
+    "version": "1.0.0",
+    "description": "",
+    "main": "app.js",
+    "author": "jmir",
+    "license": "GPL-3.0-or-later",
+    "scripts": {
+        "start": "node app.js",
+        "test": "mocha --timeout 10000"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/jmir1/osm.git"
+    },
+    "dependencies": {
+        "body-parser": "^1.19.0",
+        "cookie-encrypter": "^1.0.1",
+        "cookie-parser": "^1.4.5",
+        "dotenv": "^8.2.0",
+        "express": "^4.17.1",
+        "fs": "^0.0.1-security",
+        "http": "^0.0.1-security",
+        "https": "^1.0.0",
+        "mongodb": "^3.6.3",
+        "node-fetch": "^2.6.1",
+        "querystring": "^0.2.0",
+        "randomstring": "^1.1.5",
+        "request": "^2.88.2"
+    },
+    "devDependencies": {
+        "chai": "^4.3.4",
+        "chai-http": "^4.3.0",
+        "mocha": "^8.3.2",
+        "prettier": "^2.2.1"
+    }
 }

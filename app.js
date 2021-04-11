@@ -10,7 +10,7 @@ const bodyparser = require("body-parser");
 const request = require("request");
 const http = require("http");
 const fs = require("fs");
-const f = require('util').format;
+const f = require("util").format;
 const randomstring = require("randomstring");
 
 const rootdir = process.env.ROOTDIR;
@@ -22,24 +22,33 @@ const client_secret = process.env.CLIENT_SECRET;
 
 var dbuser = encodeURIComponent(process.env.DBUSER);
 var dbpassword = encodeURIComponent(process.env.DBPASS);
-var authMechanism = 'DEFAULT';
+var authMechanism = "DEFAULT";
 var MongoClient = require("mongodb").MongoClient;
 var dburl = process.env.DBIP;
-var url = f('mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s',
-  dbuser, dbpassword, dburl, authMechanism);
+var url = f(
+  "mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s",
+  dbuser,
+  dbpassword,
+  dburl,
+  authMechanism
+);
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
 //we establish the mongodb connection and start
 var dbo;
 
-MongoClient.connect(url, {
-  useUnifiedTopology: true
-}, function (err, db) {
-  if (err) throw err;
-  dbo = db.db("osu-stocks");
-  first_token();
-});
+MongoClient.connect(
+  url,
+  {
+    useUnifiedTopology: true
+  },
+  function (err, db) {
+    if (err) throw err;
+    dbo = db.db("osu-stocks");
+    first_token();
+  }
+);
 
 //we request an access token with the client_credentials method
 var cc_access_token;
@@ -53,7 +62,7 @@ function first_token() {
       grant_type: "client_credentials",
       scope: "public"
     },
-    json: true,
+    json: true
   };
   request.post(options, function (error, response, body) {
     if (!error && response.statusCode === 200) {
@@ -78,7 +87,7 @@ function get_token() {
       grant_type: "client_credentials",
       scope: "public"
     },
-    json: true,
+    json: true
   };
   request.post(options, function (error, response, body) {
     if (!error && response.statusCode === 200) {
@@ -98,42 +107,38 @@ var stocks = {};
 var users = {};
 
 async function initialize_objects() {
-  stocksresult = await dbo
-    .collection("inventory")
-    .find({})
-    .toArray();
+  stocksresult = await dbo.collection("inventory").find({}).toArray();
   for (stock in stocksresult)
     stocks[stocksresult[stock].user.user.id.toString()] = stocksresult[stock];
 
-  var usersresult = await dbo
-    .collection("users")
-    .find({})
-    .toArray();
+  var usersresult = await dbo.collection("users").find({}).toArray();
   for (user in usersresult)
     users[usersresult[user].user.id.toString()] = usersresult[user];
-  console.log("initialized objects.")
+  console.log("initialized objects.");
 }
 
 //function to continuously update stats
 async function update_leaderboard(page) {
   if (page) {
     var options = {
-      url: "https://osu.ppy.sh/api/v2/rankings/osu/performance?cursor[page]=" +
+      url:
+        "https://osu.ppy.sh/api/v2/rankings/osu/performance?cursor[page]=" +
         page,
       headers: {
         Authorization: "Bearer " + cc_access_token
-      },
+      }
     };
     try {
       const response = await fetch(options.url, {
         method: "GET",
-        headers: options.headers,
+        headers: options.headers
       });
       json = await response.json();
       var myobj = json.ranking;
       update_stocks(myobj, page).then(() => {
         //this number (page < x) specifies the cutoff point for when player stats aren't updated any more: e.g. page < 30 means that if a player is not in top 1500, their stats won't update
-        if (json.cursor && page < 30) setTimeout(update_leaderboard, 500, json.cursor.page);
+        if (json.cursor && page < 30)
+          setTimeout(update_leaderboard, 500, json.cursor.page);
         else {
           console.log("updated leaderboard.");
           setTimeout(update_leaderboard, 2000, 1);
@@ -180,12 +185,16 @@ async function update_stocks(ranking, page) {
       var pp30_thing = 0;
       var pp30_sum = 0;
       for (
-        var pp30_idx = 1; pp30_idx < stocks[id_str]["pp-30"].length; pp30_idx++
+        var pp30_idx = 1;
+        pp30_idx < stocks[id_str]["pp-30"].length;
+        pp30_idx++
       ) {
         pp30_sum += pp30_idx;
       }
       for (
-        var pp30_idx = 0; pp30_idx < stocks[id_str]["pp-30"].length - 1; pp30_idx++
+        var pp30_idx = 0;
+        pp30_idx < stocks[id_str]["pp-30"].length - 1;
+        pp30_idx++
       ) {
         pp30_thing +=
           (stocks[id_str]["pp-30"][pp30_idx + 1].pp -
@@ -219,7 +228,8 @@ async function update_stocks(ranking, page) {
           replacement: stocks[id_str]
         }
       });
-    } else if (!stocks[id_str] && page <= 20) { //this number specifies at what rank new players are added. (20 = top 1000)
+    } else if (!stocks[id_str] && page <= 20) {
+      //this number specifies at what rank new players are added. (20 = top 1000)
       console.log("added user " + id_str);
       //add new user to db
       stocks[id_str] = {
@@ -229,16 +239,17 @@ async function update_stocks(ranking, page) {
           bought: 0
         },
         price: ranking[stock].pp / 100,
-        "pp-30": [{
-          date: Date.now() - 1,
-          pp: ranking[stock].pp,
-          price: ranking[stock].pp / 100
-        },
-        {
-          date: Date.now(),
-          pp: ranking[stock].pp,
-          price: ranking[stock].pp / 100
-        }
+        "pp-30": [
+          {
+            date: Date.now() - 1,
+            pp: ranking[stock].pp,
+            price: ranking[stock].pp / 100
+          },
+          {
+            date: Date.now(),
+            pp: ranking[stock].pp,
+            price: ranking[stock].pp / 100
+          }
         ]
       };
       bulkwrite.push({
@@ -249,9 +260,8 @@ async function update_stocks(ranking, page) {
     }
   }
   //we write the entire page into the db at once for performance reasons
-  if (bulkwrite.length > 0) await dbo
-    .collection("inventory")
-    .bulkWrite(bulkwrite);
+  if (bulkwrite.length > 0)
+    await dbo.collection("inventory").bulkWrite(bulkwrite);
 }
 
 //function to continuously update users
@@ -263,12 +273,12 @@ async function update_users() {
       url: "https://osu.ppy.sh/api/v2/users/" + users[id].user.id,
       headers: {
         Authorization: "Bearer " + cc_access_token
-      },
+      }
     };
     try {
       const response = await fetch(options.url, {
         method: "GET",
-        headers: options.headers,
+        headers: options.headers
       });
       json = await response.json();
       users[id].user = json;
@@ -298,9 +308,7 @@ async function update_users() {
       }
     });
   }
-  if (bulkwrite.length > 0) await dbo
-    .collection("users")
-    .bulkWrite(bulkwrite);
+  if (bulkwrite.length > 0) await dbo.collection("users").bulkWrite(bulkwrite);
   console.log("updated users");
   setTimeout(update_users, 10000, 1);
 }
@@ -311,9 +319,11 @@ async function update_users() {
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 
 //bodyparser for post routes
-app.use(bodyparser.urlencoded({
-  extended: true
-}));
+app.use(
+  bodyparser.urlencoded({
+    extended: true
+  })
+);
 
 //static webserver for frontend
 app.use(express.static(rootdir + "/osm-web/build"));
@@ -330,7 +340,7 @@ function get_stock(stock) {
     username: stocks[stock.toString()].user.user.username,
     id: stocks[stock.toString()].user.user.id,
     shares: stocks[stock.toString()].shares
-  }
+  };
 }
 
 //route to get info about yourself
@@ -390,7 +400,7 @@ app.post("/api/buy", function (req, res) {
   var sessioncookie = req.body.session_cookie;
   if (stock_id && quantity && user_id && sessioncookie) {
     let result = buy_stock(stock_id, quantity, user_id, sessioncookie);
-    res.send(result)
+    res.send(result);
   }
 });
 //function to buy stocks (just a placeholder)
@@ -414,13 +424,13 @@ app.get("/api/login", function (req, res) {
   // your application requests authorization
   res.redirect(
     "https://osu.ppy.sh/oauth/authorize?" +
-    querystring.stringify({
-      response_type: "code",
-      client_id: client_id,
-      state: referer,
-      scope: "public identify",
-      redirect_uri: process.env.REDIRECT_URI,
-    })
+      querystring.stringify({
+        response_type: "code",
+        client_id: client_id,
+        state: referer,
+        scope: "public identify",
+        redirect_uri: process.env.REDIRECT_URI
+      })
   );
 });
 
@@ -436,9 +446,9 @@ app.get("/api/callback", function (req, res) {
         client_secret: client_secret,
         code: code,
         grant_type: "authorization_code",
-        redirect_uri: process.env.REDIRECT_URI,
+        redirect_uri: process.env.REDIRECT_URI
       },
-      json: true,
+      json: true
     };
     request.post(authOptions, function (error, response, body) {
       if (!error && response.statusCode === 200) {
@@ -447,13 +457,13 @@ app.get("/api/callback", function (req, res) {
         var cookieParams = {
           plain: true,
           httpOnly: true,
-          maxAge: expires_in * 1000,
+          maxAge: expires_in * 1000
         };
         var options = {
           url: "https://osu.ppy.sh/api/v2/me/osu",
           headers: {
             Authorization: "Bearer " + access_token
-          },
+          }
         };
         request.get(options, function (error, response, body) {
           var result = JSON.parse(body);
@@ -469,18 +479,18 @@ app.get("/api/callback", function (req, res) {
       } else {
         res.redirect(
           "/#" +
-          querystring.stringify({
-            error: "error",
-          })
+            querystring.stringify({
+              error: "error"
+            })
         );
       }
     });
   } else {
     res.redirect(
       "/#" +
-      querystring.stringify({
-        error: "error",
-      })
+        querystring.stringify({
+          error: "error"
+        })
     );
   }
 });
@@ -498,10 +508,12 @@ async function login_user(userres, sessioncookie, expires_in) {
       shares: {},
       share_worth: 0,
       balance: 100000,
-      sessioncookies: [{
-        date: Date.now() + expires_in * 1000,
-        token: sessioncookie
-      }]
+      sessioncookies: [
+        {
+          date: Date.now() + expires_in * 1000,
+          token: sessioncookie
+        }
+      ]
     };
     await dbo.collection("users").insertOne(users[userres.id.toString()]);
   }

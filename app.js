@@ -344,12 +344,19 @@ app.get("/api/me", function (req, res) {
 
 //route to get the stocks sorted by their value
 app.get("/api/rankings", function (req, res) {
+  const filters = {};
+  // Limit example: /api/rankings?limit=100
+  if (req.query.limit) {
+    filters.limit = parseInt(req.query.limit);
+  }
+
   res.type("application/json");
-  res.send(get_leaderboard());
+  res.send(get_leaderboard(filters));
 });
 //this function formats and returns the stocks sorted by their value
-function get_leaderboard() {
-  var string = "[";
+function get_leaderboard(filters) {
+  const { limit } = filters;
+  // var string = "[";
   var result = [];
   for (stock in stocks) {
     result.push({
@@ -363,12 +370,16 @@ function get_leaderboard() {
   result.sort(function (a, b) {
     return b.price - a.price;
   });
-  for (player in result) {
-    if (player == result.length - 1)
-      string += JSON.stringify(result[player]) + "]";
-    else string += JSON.stringify(result[player]) + ",\n";
+  if (limit) {
+    result = result.slice(0, limit);
   }
-  return string;
+  // Shouldn't be necessary as express will convert arrays/objects to JSON strings
+  // for (player in result) {
+  //   if (player == result.length - 1)
+  //     string += JSON.stringify(result[player]) + "]";
+  //   else string += JSON.stringify(result[player]) + ",\n";
+  // }
+  return result;
 }
 ///*not ready
 //route for buying stock

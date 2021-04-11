@@ -369,13 +369,13 @@ function get_leaderboard({ limit }) {
   if (limit) {
     result = result.slice(0, limit);
   }
-  // Shouldn't be necessary
+  // Shouldn't be necessary as express will convert arrays/objects to JSON strings
   // for (player in result) {
   //   if (player == result.length - 1)
   //     string += JSON.stringify(result[player]) + "]";
   //   else string += JSON.stringify(result[player]) + ",\n";
   // }
-  return JSON.stringify(result);
+  return result;
 }
 ///*not ready
 //route for buying stock

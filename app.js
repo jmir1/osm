@@ -230,15 +230,15 @@ async function update_stocks(ranking, page) {
         },
         price: ranking[stock].pp / 100,
         "pp-30": [{
-            date: Date.now() - 1,
-            pp: ranking[stock].pp,
-            price: ranking[stock].pp / 100
-          },
-          {
-            date: Date.now(),
-            pp: ranking[stock].pp,
-            price: ranking[stock].pp / 100
-          }
+          date: Date.now() - 1,
+          pp: ranking[stock].pp,
+          price: ranking[stock].pp / 100
+        },
+        {
+          date: Date.now(),
+          pp: ranking[stock].pp,
+          price: ranking[stock].pp / 100
+        }
         ]
       };
       bulkwrite.push({
@@ -499,6 +499,9 @@ async function login_user(userres, sessioncookie, expires_in) {
 //start the server
 const httpServer = http.createServer(app);
 httpServer.listen(process.env.PORT);
+
+// For testing
+module.exports = app;
 
 /*don't need all this right now
 app.get("/api/refresh_token", function (req, res) {

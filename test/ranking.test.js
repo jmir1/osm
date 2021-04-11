@@ -27,13 +27,16 @@ describe("Rankings endpoint", () => {
     describe("GET /stock", () => {
         it("Should return the stock status for an individual player", (done) => {
             chai.request(app)
-                .get("/api/stock?stock=7562902")
+                .get("/api/stock?stock=7562902") /** mrekk */
                 .end((err, res) => {
                     expect(res).to.have.status(200);
                     expect(res.body).to.be.instanceOf(Object);
                     expect(res.body.id).to.be.instanceOf(Number);
                     expect(res.body.username).to.be.instanceOf(String);
                     expect(res.body.price).to.be.instanceOf(Number);
+                    expect(res.body.shares).to.be.instanceOf(Object);
+                    expect(res.body.shares.total).to.be.instanceOf(Number);
+                    expect(res.body.shares.bought).to.be.instanceOf(Number);
 
                 })
         })

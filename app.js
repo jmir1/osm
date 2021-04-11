@@ -135,17 +135,16 @@ async function update_leaderboard(page) {
       });
       json = await response.json();
       var myobj = json.ranking;
-      update_stocks(myobj, page).then(() => {
-        //this number (page < x) specifies the cutoff point for when player stats aren't updated any more: e.g. page < 30 means that if a player is not in top 1500, their stats won't update
-        if (json.cursor && page < 30)
-          setTimeout(update_leaderboard, 500, json.cursor.page);
-        else {
-          console.log("updated leaderboard.");
-          setTimeout(update_leaderboard, 2000, 1);
-        }
-      });
+      await update_stocks(myobj, page);
     } catch (error) {
       console.log("error" + error);
+    }
+    if (json.cursor && page < 30)
+      //this number (page < x) specifies the cutoff point for when player stats aren't updated any more: e.g. page < 30 means that if a player is not in top 1500, their stats won't update
+      setTimeout(update_leaderboard, 500, json.cursor.page);
+    else {
+      console.log("updated leaderboard.");
+      setTimeout(update_leaderboard, 2000, 1);
     }
   }
 }

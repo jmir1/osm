@@ -1,11 +1,11 @@
-name: server deployment
+name: new server deployment
 
 on: [push] # tells github to run this on any push to the repository
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' # we tell Github to only execute this step if we're on our master branch (so we don't put unfinished branches in production)
+    if: github.ref == 'refs/heads/new' # we tell Github to only execute this step if we're on our master branch (so we don't put unfinished branches in production)
     steps:
       - name: Deploying to server
         uses: appleboy/ssh-action@master # An action made to control Linux servers
@@ -15,8 +15,8 @@ jobs:
           password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
           script: |
-            cd /home/${{ secrets.USERNAME }}/osm # we move into our app's folder
+            cd /home/${{ secrets.USERNAME }}/osm-new # we move into our app's folder
             git pull # we pull any changes from git
             npm prune # we remove any unused dependencies
             npm install # we install any missing dependencies
-            pm2 reload all --exp-backoff-restart-delay=100 --time # we reload the app via PM2; use "--max-memory-restart 1024M" if memory gets out of hand
+            pm2 reload osm-new --exp-backoff-restart-delay=100 --time # we reload the app via PM2; use "--max-memory-restart 1024M" if memory gets out of hand

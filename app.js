@@ -321,12 +321,17 @@ app.get("/api/fetch/columns", function (req, res) {
       username: { name: "username", description: "username" },
       rank: { name: "rank", description: "rank" },
       price: { name: "price", description: "price" },
-      id: { name: "id", description: "id" }
+      id: { name: "id", description: "id" },
+      pp: { name: "pp", description: "pp" }
     },
     types: {
       ranking: [
         {
           key: "username",
+          hidden: false
+        },
+        {
+          key: "pp",
           hidden: false
         },
         {

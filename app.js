@@ -314,7 +314,7 @@ app.use(
 );
 
 //static webserver for frontend
-app.use(express.static(rootdir + "/index"));
+app.use(express.static(rootdir + "/osm-web-new"));
 app.get("/api/fetch/columns", function (req, res) {
   res.send({
     keys: {

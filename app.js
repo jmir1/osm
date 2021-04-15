@@ -325,8 +325,90 @@ app.use(
 );
 
 //static webserver for frontend
-app.use(express.static(rootdir + "/osm-web/build"));
+app.use(express.static(rootdir + "/index"));
+app.get("/api/fetch/columns", function (req, res) {
+  res.send({
+    keys: {
+      username: { name: "username", description: "username" },
+      rank: { name: "rank", description: "rank" },
+      price: { name: "price", description: "price" },
+      id: { name: "id", description: "id" }
+    },
+    types: {
+      anime: [
+        {
+          key: "username",
+          hidden: false
+        },
+        {
+          key: "rank",
+          hidden: false
+        },
+        {
+          key: "price",
+          hidden: false
+        },
+        {
+          key: "id",
+          hidden: false
+        }
+      ],
+      animeDownload: [],
+      manga: [],
+      novel: [],
+      application: []
+    }
+  });
+});
+app.get("/api/fetch/data/stocks", function (req, res) {
+  const filters = {};
+  // Limit example: /api/rankings?limit=100
+  if (req.query.limit) {
+    filters.limit = parseInt(req.query.limit);
+  }
 
+  res.type("application/json");
+  res.send(get_leaderboard(filters));
+});
+//res.send([{features:"lol",siteName:"bruh",siteAddresses:"https://stocks.jmir.xyz"}])
+app.get("/user/is-login", function (req, res) {
+  res.send({ edit: true });
+});
+app.get("/api/fetch/tables", function (req, res) {
+  res.send([
+    {
+      tab: "animeTables",
+      name: "stocks",
+      tables: [
+        {
+          id: "stocks",
+          title: "English Streaming Sites",
+          type: "anime"
+        }
+      ]
+    },
+    {
+      tab: "mangaTables",
+      name: "Manga",
+      tables: []
+    },
+    {
+      tab: "lightNovelTables",
+      name: "Novels",
+      tables: []
+    },
+    {
+      tab: "applicationsTables",
+      name: "Applications",
+      tables: []
+    },
+    {
+      tab: "hentaiTables",
+      name: "Hentai",
+      tables: []
+    }
+  ]);
+});
 //route to get info about a stock
 app.get("/api/stock", function (req, res) {
   var stock = req.query.stock;

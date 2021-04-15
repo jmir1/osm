@@ -10,7 +10,6 @@ const bodyparser = require("body-parser");
 const request = require("request");
 const http = require("http");
 const fs = require("fs");
-const f = require("util").format;
 const randomstring = require("randomstring");
 
 const rootdir = process.env.ROOTDIR;
@@ -20,18 +19,8 @@ const cookie_secret = process.env.COOKIE_SECRET;
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
 
-var dbuser = encodeURIComponent(process.env.DBUSER);
-var dbpassword = encodeURIComponent(process.env.DBPASS);
-var authMechanism = "DEFAULT";
 var MongoClient = require("mongodb").MongoClient;
-var dburl = process.env.DBIP;
-var url = f(
-  "mongodb://%s:%s@%s:27017/osu-stocks?authMechanism=%s",
-  dbuser,
-  dbpassword,
-  dburl,
-  authMechanism
-);
+var url = process.env.DBURL;
 
 app.use(cookieParser(cookie_secret)).use(cookieEncrypter(cookie_secret));
 

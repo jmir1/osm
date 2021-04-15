@@ -324,7 +324,7 @@ app.get("/api/fetch/columns", function (req, res) {
       id: { name: "id", description: "id" }
     },
     types: {
-      anime: [
+      ranking: [
         {
           key: "username",
           hidden: false
@@ -366,35 +366,15 @@ app.get("/user/is-login", function (req, res) {
 app.get("/api/fetch/tables", function (req, res) {
   res.send([
     {
-      tab: "animeTables",
+      tab: "rankingTables",
       name: "stocks",
       tables: [
         {
           id: "stocks",
-          title: "English Streaming Sites",
-          type: "anime"
+          title: "stock information",
+          type: "ranking"
         }
       ]
-    },
-    {
-      tab: "mangaTables",
-      name: "Manga",
-      tables: []
-    },
-    {
-      tab: "lightNovelTables",
-      name: "Novels",
-      tables: []
-    },
-    {
-      tab: "applicationsTables",
-      name: "Applications",
-      tables: []
-    },
-    {
-      tab: "hentaiTables",
-      name: "Hentai",
-      tables: []
     }
   ]);
 });

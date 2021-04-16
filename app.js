@@ -161,12 +161,9 @@ async function update_stocks(ranking, page) {
         stocks[id_str]["pp-30"].shift();
       }
       //update pp history
-      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1] = {
-        date: Date.now(),
-        pp: ranking[stock].pp,
-        price: price,
-        rank: ranking[stock].global_rank
-      };
+      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1].date = Date.now();
+      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1].pp = ranking[stock].pp;
+      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1].rank = ranking[stock].global_rank;
       //calculate the supply/demand multiplier
       var market_multiplier =
         1 / (1 - stocks[id_str].shares.bought / stocks[id_str].shares.total);
@@ -209,6 +206,7 @@ async function update_stocks(ranking, page) {
       }
       //update the price in the stock object
       stocks[id_str].price = price;
+      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1].price = price;
       //add replace operation to the bulkwrite (more performance!)
       bulkwrite.push({
         replaceOne: {

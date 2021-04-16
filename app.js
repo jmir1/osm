@@ -206,6 +206,7 @@ async function update_stocks(ranking, page) {
       }
       //update the price in the stock object
       stocks[id_str].price = price;
+      stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].price - 1].rank = price;
       //add replace operation to the bulkwrite (more performance!)
       bulkwrite.push({
         replaceOne: {

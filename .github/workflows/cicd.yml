@@ -19,4 +19,4 @@ jobs:
             git pull # we pull any changes from git
             npm prune # we remove any unused dependencies
             npm install # we install any missing dependencies
-            pm2 reload all --exp-backoff-restart-delay=100 --time # we reload the app via PM2; use "--max-memory-restart 1024M" if memory gets out of hand
+            pm2 reload osm --exp-backoff-restart-delay=100 --time # we reload the app via PM2; use "--max-memory-restart 1024M" if memory gets out of hand

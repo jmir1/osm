@@ -164,7 +164,8 @@ async function update_stocks(ranking, page) {
       stocks[id_str]["pp-30"][stocks[id_str]["pp-30"].length - 1] = {
         date: Date.now(),
         pp: ranking[stock].pp,
-        price: price
+        price: price,
+        rank: ranking[stock].user.global_rank
       };
       //calculate the supply/demand multiplier
       var market_multiplier =
@@ -202,7 +203,8 @@ async function update_stocks(ranking, page) {
         stocks[id_str]["pp-30"].push({
           date: Date.now(),
           pp: ranking[stock].pp,
-          price: price
+          price: price,
+          rank: ranking[stock].user.global_rank
         });
       }
       //update the price in the stock object
@@ -231,12 +233,14 @@ async function update_stocks(ranking, page) {
           {
             date: Date.now() - 1,
             pp: ranking[stock].pp,
-            price: ranking[stock].pp / 100
+            price: ranking[stock].pp / 100,
+            rank: ranking[stock].user.global_rank
           },
           {
             date: Date.now(),
             pp: ranking[stock].pp,
-            price: ranking[stock].pp / 100
+            price: ranking[stock].pp / 100,
+            rank: ranking[stock].user.global_rank
           }
         ]
       };

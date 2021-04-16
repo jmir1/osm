@@ -322,7 +322,8 @@ app.get("/api/fetch/columns", function (req, res) {
       rank: { name: "rank", description: "rank" },
       price: { name: "price", description: "price" },
       id: { name: "id", description: "id" },
-      pp: { name: "pp", description: "pp" }
+      pp: { name: "pp", description: "pp" },
+      pp_history: { name: "pp_history", description: "pp_history"}
     },
     types: {
       ranking: [
@@ -345,12 +346,12 @@ app.get("/api/fetch/columns", function (req, res) {
         {
           key: "id",
           hidden: false
+        },
+        {
+          key: "pp_history",
+          hidden: true
         }
-      ],
-      animeDownload: [],
-      manga: [],
-      novel: [],
-      application: []
+      ]
     }
   });
 });
@@ -429,7 +430,8 @@ function get_leaderboard(filters) {
       rank: stocks[stock].user.global_rank,
       pp: stocks[stock].user.pp,
       price: stocks[stock].price,
-      id: stocks[stock].user.user.id
+      id: stocks[stock].user.user.id,
+      pp_history: stocks[stock]["pp-30"]
     });
   }
   result.sort(function (a, b) {
